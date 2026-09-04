@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+        Advertises the phone companion to the watch over the Wearable Data Layer.
+        The watch listens for CAPABILITY_CHANGED on this name to know when the phone is
+        reachable again, and drains its offline event queue at that point.
+
+        Keep in sync with WearSyncPaths.CAPABILITY_PHONE_COMPANION.
+    -->
+    <string-array name="android_wear_capabilities">
+        <item>lucid_phone_companion</item>
+    </string-array>
+
+</resources>

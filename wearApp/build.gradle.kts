@@ -65,6 +65,16 @@ dependencies {
     implementation("com.google.android.gms:play-services-wearable:19.0.0")
     implementation("androidx.core:core-ktx:1.15.0")
 
+    constraints {
+        // androidx.activity's ActivityResult APIs are incompatible with fragment < 1.3.0, which
+        // something in the transitive graph still resolves (lint: InvalidFragmentVersionForActivityResult).
+        // A constraint raises that version only if fragment is already present, rather than
+        // pulling in a dependency this Compose-only module does not otherwise use.
+        implementation("androidx.fragment:fragment:1.8.5") {
+            because("androidx.activity ActivityResult APIs require fragment 1.3.0 or newer")
+        }
+    }
+
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")

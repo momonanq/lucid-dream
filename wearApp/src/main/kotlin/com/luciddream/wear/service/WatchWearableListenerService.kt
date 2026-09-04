@@ -2,8 +2,8 @@ package com.luciddream.wear.service
 
 import android.content.Intent
 import androidx.core.content.ContextCompat
+import com.google.android.gms.wearable.CapabilityInfo
 import com.google.android.gms.wearable.MessageEvent
-import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.WearableListenerService
 import com.luciddream.data.db.LucidDatabase
 import com.luciddream.data.sync.AndroidWatchWearableTransportGateway
@@ -39,8 +39,19 @@ class WatchWearableListenerService : WearableListenerService() {
         }
     }
 
-    override fun onPeerConnected(peer: Node) {
-        super.onPeerConnected(peer)
+    /**
+     * Fires when the phone companion becomes reachable (or unreachable) again.
+     *
+     * This replaces onPeerConnected, which was only delivered through the deprecated
+     * BIND_LISTENER binding. The phone advertises [WearSyncPaths.CAPABILITY_PHONE_COMPANION]
+     * in its res/values/wear.xml; an empty node set means it is currently away, so there is
+     * nothing to drain to.
+     */
+    override fun onCapabilityChanged(capabilityInfo: CapabilityInfo) {
+        super.onCapabilityChanged(capabilityInfo)
+        if (capabilityInfo.name != WearSyncPaths.CAPABILITY_PHONE_COMPANION) return
+        if (capabilityInfo.nodes.isEmpty()) return
+
         serviceScope.launch {
             val db = LucidDatabase.getInstance(applicationContext)
             val gateway = AndroidWatchWearableTransportGateway(

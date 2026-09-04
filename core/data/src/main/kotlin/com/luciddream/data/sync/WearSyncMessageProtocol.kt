@@ -14,6 +14,17 @@ object WearSyncPaths {
     const val PATH_WAKE_SPIKE = "/lucid/event/wake_spike"
     const val PATH_MORNING_FEEDBACK = "/lucid/morning/feedback"
     const val PATH_HEARTBEAT = "/lucid/status/heartbeat"
+
+    /**
+     * Capability advertised by the phone app so the watch learns when its companion becomes
+     * reachable again. Replaces the deprecated onPeerConnected callback, which was only ever
+     * delivered through the removed BIND_LISTENER binding.
+     *
+     * Declared on the phone in res/values/wear.xml; the watch matches it in its
+     * CAPABILITY_CHANGED intent filter with scheme "wear", host "any", and this name as the
+     * path prefix.
+     */
+    const val CAPABILITY_PHONE_COMPANION = "lucid_phone_companion"
 }
 
 @Serializable

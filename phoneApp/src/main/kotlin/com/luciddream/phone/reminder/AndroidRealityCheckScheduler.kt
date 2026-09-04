@@ -95,11 +95,27 @@ object AndroidRealityCheckScheduler {
         }
     }
 
+    /**
+     * Schedules a reminder, preferring an exact alarm but never depending on one.
+     *
+     * From Android 12 the user can revoke SCHEDULE_EXACT_ALARM at any time, and the revocation
+     * can land between the check and the call. A daytime reality-check prompt is not worth
+     * crashing the app over, so both cases fall back to an inexact alarm: it still fires, just
+     * not to the minute, which is fine for a reminder the user answers whenever they notice it.
+     */
     private fun setExactAlarm(alarmManager: AlarmManager, triggerAtMillis: Long, pendingIntent: PendingIntent) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-        } else {
-            alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+        val mayScheduleExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            alarmManager.canScheduleExactAlarms()
+
+        if (mayScheduleExact) {
+            try {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+                return
+            } catch (_: SecurityException) {
+                // Permission revoked after the check; fall through to the inexact path below.
+            }
         }
+
+        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
     }
 }

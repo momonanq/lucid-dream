@@ -18,6 +18,15 @@
         android:supportsRtl="true"
         android:theme="@android:style/Theme.DeviceDefault">
 
+        <!--
+            false: the watch app cannot work on its own. The phone sets up the night session,
+            imports sleep stages from Samsung Health and plays the audio half of a TLR cue,
+            so the watch requires the companion app to be installed.
+        -->
+        <meta-data
+            android:name="com.google.android.wearable.standalone"
+            android:value="false" />
+
         <activity
             android:name=".ui.WatchMainActivity"
             android:exported="true">
@@ -35,8 +44,23 @@
         <service
             android:name=".service.WatchWearableListenerService"
             android:exported="true">
+
+            <!-- Session commands from the phone. All protocol paths live under /lucid. -->
             <intent-filter>
-                <action android:name="com.google.android.gms.wearable.BIND_LISTENER" />
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:pathPrefix="/lucid" />
+            </intent-filter>
+
+            <!-- Phone reachability, used to drain the offline event queue after a reconnect. -->
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.CAPABILITY_CHANGED" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:pathPrefix="/lucid_phone_companion" />
             </intent-filter>
         </service>
 

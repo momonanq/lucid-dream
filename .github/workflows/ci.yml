@@ -20,8 +20,37 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Run build and tests
-        run: ./gradlew check test --no-daemon
+      # Split into three steps so a red run says which stage broke. A single `check test`
+      # reports a lint violation the same way as a failing test, and lint aborts the build
+      # before the tests ever run.
+      - name: Compile
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Unit tests
+        run: ./gradlew test --no-daemon
+
+      - name: Lint
+        run: ./gradlew lint --no-daemon
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-reports
+          path: |
+            **/build/reports/lint-results-*.txt
+            **/build/reports/tests/**
+          if-no-files-found: ignore
+          retention-days: 14
