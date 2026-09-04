@@ -1,0 +1,19 @@
+﻿{
+  "$schema": "https://repomix.com/schemas/config.json",
+  "output": {
+    "filePath": "docs/codebase_dump.md",
+    "style": "markdown",
+    "compress": true,
+    "removeComments": true,
+    "showLineNumbers": false
+  },
+  "ignore": {
+    "useGitignore": true,
+    "customPatterns": [
+      "graph.html",
+      "graph.json",
+      ".antigravity/**",
+      "docs/codebase_dump.md"
+    ]
+  }
+}

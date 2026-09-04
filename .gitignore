@@ -1,0 +1,23 @@
+# Environment & Secrets
+.env
+.env.local
+
+# Gradle & Kotlin build directories
+.gradle/
+build/
+**/build/
+.kotlin/
+
+# IDE & Editor files
+.idea/
+*.iml
+.vscode/
+.antigravity/
+
+# AI Tooling & Graphify
+graph.html
+graph.json
+!GRAPH_REPORT.md
+docs/codebase_dump.md
+.cursor/
+graphify-out/

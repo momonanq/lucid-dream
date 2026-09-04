@@ -1,0 +1,19 @@
+﻿# CLAUDE.md - Project Guidelines & Rules
+
+# AI AGENT OPERATIONAL CONVENTIONS
+
+## 1. Token Economy & Graph-First Policy
+- Before deep multi-file analysis, inspect GRAPH_REPORT.md or graph.json to understand dependencies.
+- If dependency insights are missing, execute graphify . via terminal.
+- Target ONLY relevant files for the current task to preserve context window.
+- For codebase audit or heavy context bundling, use epomix --compress.
+
+## 2. Autonomous Maintenance & Sync
+- **Auto-Sync:** Whenever module structure, imports/exports, or public APIs are updated, re-run graphify . in the terminal.
+- Keep task progress updated in TASKS.md.
+
+## 3. Engineering & Code Quality Standards
+- Strict typing, modular architecture, and separation of concerns.
+- Always write pure, testable, well-documented functions.
+- Do not refactor unrelated code or perform unrequested cosmetic renames.
+- Project Stack: Универсальный проект
