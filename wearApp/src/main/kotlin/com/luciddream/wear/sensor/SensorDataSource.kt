@@ -11,10 +11,16 @@ import com.luciddream.model.IbiReading
 import com.luciddream.model.MotionReading
 import kotlinx.coroutines.*
 
-enum class SourceFidelity(val displayName: String) {
-    SAMSUNG_CONTINUOUS_IBI("Samsung Health Sensor SDK (Continuous IBI)"),
-    ANDROID_STANDARD_HR("Standard Wear OS (Heart Rate Sensor)"),
-    SIMULATED("Simulated Biometric Data")
+enum class SourceFidelity(val displayName: String, val providesIbi: Boolean) {
+    SAMSUNG_CONTINUOUS_IBI("Samsung Health Sensor SDK (Continuous IBI)", providesIbi = true),
+
+    /**
+     * Ordinary Wear OS heart rate sensor. Reports averaged BPM only: beat-to-beat intervals are
+     * not exposed by the platform, so no HRV metric can be derived from this source.
+     */
+    ANDROID_STANDARD_HR("Standard Wear OS (Heart Rate Sensor)", providesIbi = false),
+
+    SIMULATED("Simulated Biometric Data", providesIbi = true)
 }
 
 enum class SamplingPolicy(val activeSecondsPerCycle: Int, val cyclePeriodSeconds: Int) {
@@ -56,8 +62,6 @@ class AndroidStandardSensorDataSource(
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var dutyCycleJob: Job? = null
     private var isSensorsRegistered = false
-
-    private var lastHeartRateTimestampMs = 0L
 
     override fun start(callback: SensorDataCallback) {
         this.callback = callback
@@ -128,16 +132,13 @@ class AndroidStandardSensorDataSource(
                 val bpm = ev.values.firstOrNull()?.toDouble() ?: return
                 if (bpm in 30.0..220.0) {
                     cb.onHeartRate(HeartRateReading(now, bpm))
-
-                    // Compute IBI: from timestamp delta if valid, else synthetic from instantaneous BPM
-                    val calculatedIbi = if (lastHeartRateTimestampMs > 0 && (now - lastHeartRateTimestampMs) in 300..2000) {
-                        (now - lastHeartRateTimestampMs).toDouble()
-                    } else {
-                        (60000.0 / bpm)
-                    }
-                    lastHeartRateTimestampMs = now
-                    cb.onIbi(IbiReading(now, calculatedIbi))
                 }
+                // Deliberately no onIbi here. TYPE_HEART_RATE reports averaged BPM; the platform
+                // exposes no beat-to-beat timing. Deriving an "IBI" from the callback interval
+                // would measure the sampling cadence, and 60000/bpm is just a restatement of the
+                // BPM — either way RMSSD computed from it is an artefact wearing the name of a
+                // physiological measure. Sources that cannot measure IBI must report none, so
+                // SourceFidelity.providesIbi can exclude HRV from scoring honestly.
             }
 
             Sensor.TYPE_ACCELEROMETER -> {
@@ -160,9 +161,16 @@ class SamsungSensorDataSourceStub(
     private val context: Context
 ) : SensorDataSource {
 
-    override val fidelity: SourceFidelity = SourceFidelity.SAMSUNG_CONTINUOUS_IBI
-
     private val fallback = AndroidStandardSensorDataSource(context)
+
+    /**
+     * Reports what is actually delivered, not what this class is named after.
+     *
+     * Until the real tracker is wired up this stub is the standard Wear OS source, and claiming
+     * SAMSUNG_CONTINUOUS_IBI made the watch display "Samsung IBI Active" with no SDK attached
+     * and told the scoring engine that HRV was measured when it was not.
+     */
+    override val fidelity: SourceFidelity get() = fallback.fidelity
 
     override fun start(callback: SensorDataCallback) {
         // Fallback to standard sensors until partner signature is linked

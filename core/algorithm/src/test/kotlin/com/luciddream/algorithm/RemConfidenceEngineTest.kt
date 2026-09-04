@@ -96,6 +96,74 @@ class RemConfidenceEngineTest {
         assertEquals(0.0, breakdown.motionScore, 0.001)
     }
 
+    private fun window(hrvAvailable: Boolean) = SensorWindow(
+        startTimestampMs = 0,
+        endTimestampMs = 60000,
+        meanHr = 58.0,
+        minHr = 56.0,
+        maxHr = 60.0,
+        hrStdDev = 1.0,
+        ibiMeanMs = if (hrvAvailable) 1034.0 else 0.0,
+        rmssd = if (hrvAvailable) 45.0 else 0.0,
+        sdnn = if (hrvAvailable) 48.0 else 0.0,
+        movementIndex = 0.02,
+        sampleCount = 60,
+        hrSampleCount = 20,
+        ibiSampleCount = if (hrvAvailable) 20 else 0,
+        motionSampleCount = 20,
+        isDataSufficient = true,
+        hrvAvailable = hrvAvailable
+    )
+
+    @Test
+    fun `excludes the HRV term when the source cannot measure inter-beat intervals`() {
+        val breakdown = engine.evaluateWindow(
+            currentWindow = window(hrvAvailable = false),
+            minutesFromOnset = 320,
+            recentWindows = listOf(window(hrvAvailable = false))
+        )
+
+        assertFalse(breakdown.hrvIncluded)
+        assertEquals(0.0, breakdown.hrvScore, 0.001, "A term with no data must not carry a value")
+        assertTrue(breakdown.compositeScore > 0.0)
+    }
+
+    @Test
+    fun `renormalises the remaining weights so scores stay on the same scale`() {
+        val current = window(hrvAvailable = false)
+        val recent = listOf(current)
+
+        val breakdown = engine.evaluateWindow(current, minutesFromOnset = 320, recentWindows = recent)
+
+        // Without renormalisation the composite would be the plain weighted sum, losing the 0.20
+        // of weight the HRV term carried and capping the score at 0.80 on this hardware.
+        val plainWeightedSum = (breakdown.timeScore * 0.35) +
+            (breakdown.motionScore * 0.30) +
+            (breakdown.consistencyScore * 0.15)
+        val expected = plainWeightedSum / (0.35 + 0.30 + 0.15)
+
+        assertEquals(expected, breakdown.compositeScore, 0.001)
+        assertTrue(
+            breakdown.compositeScore > plainWeightedSum,
+            "Dropping a term must not silently shrink the score against a fixed threshold"
+        )
+    }
+
+    @Test
+    fun `a perfect window still reaches full confidence without HRV`() {
+        // Time, motion and consistency all maximal: the score must be able to reach 1.0, otherwise
+        // a device without IBI could never cross a high personalised threshold at all.
+        val still = window(hrvAvailable = false).copy(movementIndex = 0.0)
+
+        val breakdown = engine.evaluateWindow(
+            currentWindow = still,
+            minutesFromOnset = 500,
+            recentWindows = List(4) { still }
+        )
+
+        assertEquals(1.0, breakdown.compositeScore, 0.001)
+    }
+
     @Test
     fun `motion score transitions smoothly across 0_05 boundary without jump`() {
         val scoreAtBoundary = engine.calculateMotionScore(0.05)

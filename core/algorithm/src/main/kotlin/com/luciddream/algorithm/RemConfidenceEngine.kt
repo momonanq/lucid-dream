@@ -25,7 +25,13 @@ class RemConfidenceEngine(
         val motionScore: Double,
         val hrvScore: Double,
         val consistencyScore: Double,
-        val compositeScore: Double
+        val compositeScore: Double,
+        /**
+         * False when the window carried no real inter-beat intervals, so [hrvScore] was left at
+         * zero and excluded from [compositeScore] with the remaining weights renormalised.
+         * The resulting score is a weaker estimate and callers should surface that.
+         */
+        val hrvIncluded: Boolean = true
     )
 
     /**
@@ -119,20 +125,39 @@ class RemConfidenceEngine(
                 motionScore = 0.0,
                 hrvScore = 0.0,
                 consistencyScore = 0.0,
-                compositeScore = 0.0
+                compositeScore = 0.0,
+                hrvIncluded = false
             )
         }
 
         val timeScore = calculateTimeScore(minutesFromOnset)
         val motionScore = calculateMotionScore(currentWindow.movementIndex)
-        val hrvScore = calculateHrvScore(currentWindow, userBaselineHr, userBaselineIbiVar)
         val consistencyScore = calculateConsistencyScore(recentWindows)
 
-        val composite = (timeScore * timeWeight) +
+        // On a source that cannot measure beat-to-beat timing there is no HRV to score. Feeding a
+        // placeholder through the weighted sum would let a fabricated number move the decision, so
+        // the term is dropped and the surviving weights are renormalised to sum to 1. That keeps
+        // the score on the same 0..1 scale as a full-fidelity one — otherwise every threshold in
+        // the system would silently mean something different depending on the watch.
+        val hrvIncluded = currentWindow.hrvAvailable
+        val hrvScore = if (hrvIncluded) {
+            calculateHrvScore(currentWindow, userBaselineHr, userBaselineIbiVar)
+        } else {
+            0.0
+        }
+
+        val weightedSum = (timeScore * timeWeight) +
                 (motionScore * motionWeight) +
                 (hrvScore * hrvWeight) +
                 (consistencyScore * consistencyWeight)
 
+        val activeWeight = if (hrvIncluded) {
+            timeWeight + motionWeight + hrvWeight + consistencyWeight
+        } else {
+            timeWeight + motionWeight + consistencyWeight
+        }
+
+        val composite = if (activeWeight > 0.0) weightedSum / activeWeight else 0.0
         val normalizedComposite = min(1.0, max(0.0, composite))
 
         return ConfidenceBreakdown(
@@ -140,7 +165,8 @@ class RemConfidenceEngine(
             motionScore = motionScore,
             hrvScore = hrvScore,
             consistencyScore = consistencyScore,
-            compositeScore = normalizedComposite
+            compositeScore = normalizedComposite,
+            hrvIncluded = hrvIncluded
         )
     }
 }

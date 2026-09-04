@@ -21,4 +21,10 @@ graph.json
 !GRAPH_REPORT.md
 docs/codebase_dump.md
 .cursor/
-graphify-out/
+graphify-out/
+
+# Samsung Health Sensor SDK — проприетарная библиотека, распространять нельзя.
+# Скачивается разработчиком с developer.samsung.com, см. docs/SAMSUNG_HEALTH_PARTNER_GUIDE.md
+1.4.1/
+samsung-health-sensor-sdk*/
+**/libs/*.aar

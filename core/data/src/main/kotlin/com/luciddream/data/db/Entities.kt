@@ -52,7 +52,8 @@ data class SensorWindowEntity(
     val hrSampleCount: Int,
     val ibiSampleCount: Int,
     val motionSampleCount: Int,
-    val isDataSufficient: Boolean
+    val isDataSufficient: Boolean,
+    val hrvAvailable: Boolean = true
 )
 
 @Entity(tableName = "dream_entries")

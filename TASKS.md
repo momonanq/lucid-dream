@@ -4,17 +4,21 @@
 
 | Слой | Готовность | Комментарий |
 |---|---|---|
-| `:core:model` | 100% | Модели данных полные, типизированы, сериализуемы, добавлены счетчики сэмплов |
-| `:core:algorithm` | ~95% | Баги #1, #3, #4, #5, #7 исправлены, петля калибровки замкнута, guardrails усилены |
-| `:core:data` | ~45% | In-Memory репозитории с реактивным Flow (Баг #6 исправлен), Samsung Health = мок |
-| `:phoneApp` | ~10% | Консольный JVM-симулятор, не Android-приложение |
-| `:wearApp` | ~30% | Сенсор-менеджер исправлен (Баг #1, #2, #3), пока JVM без Wear OS UI/сервиса |
-| **MVP по спеке** | **~45%** | Алгоритмический и сенсорный слой безопасны, следующий шаг — Android/Wear OS |
+| `:core:model` | 100% | Модели домена полные, сериализуемые |
+| `:core:algorithm` | ~95% | Скоринг, решения, калибровка, гардрейлы. Все баги реестра закрыты. **Не валидирован на реальных данных** |
+| `:core:data` | ~70% | Room, репозитории, транспорт. Samsung Health Data = Health Connect + мок |
+| `:phoneApp` | ~85% | Android + Compose Material 3: Tonight, Dream Journal, Sleep Review, скрининг |
+| `:wearApp` | ~70% | Wear OS + Compose, foreground service, хаптика. Сенсоры — только стандартный HR |
+| **MVP по спеке** | **~70%** | Архитектура и продуктовая поверхность готовы |
 
-**Главный разрыв:** в `build.gradle.kts` ко всем subprojects применяется только `kotlin("jvm")`.
-Нет Android Gradle Plugin, `AndroidManifest.xml`, Compose и Wear OS зависимостей.
-`phoneApp` импортирует `com.luciddream.wear.*` и исполняет «часы» в том же JVM-процессе —
-граница телефон↔часы фиктивна, реальные отказы связи ночью не моделируются.
+**Главный разрыв больше не архитектурный.** Проект переведён на Android/Wear OS (M2), транспорт,
+персистентность, хаптика и аудио реальные. Осталось два блокера, и оба про данные, а не про код:
+
+1. **Нет доступа к настоящим IBI/PPG.** `SamsungSensorDataSourceStub` — заглушка поверх стандартного
+   Wear OS HR-датчика, который межпульсовых интервалов не отдаёт. Без них `hrv_score` исключается из
+   скоринга (веса перенормируются), то есть на любых часах без Samsung SDK алгоритм работает
+   в ослабленном режиме. Разблокируется developer mode — заявка для этого не нужна.
+2. **Алгоритм не валидирован.** Ни одной ночи на реальном PPG не собрано.
 
 ## ✅ Что действительно готово
 
@@ -32,15 +36,13 @@
 
 ## ❌ Что НЕ готово (следующие шаги)
 
-- [ ] Android-приложение (телефон): проект пока JVM, требуется конвертация в AGP + Jetpack Compose
-- [ ] Wear OS-приложение (часы): нет foreground service, нет Tile/Complication, нет Compose for Wear OS
-- [ ] Реальная доставка сигнала: физический вибромотор через `VibratorManager` и звук через `AudioTrack`/`ExoPlayer`
-- [ ] Samsung Health Sensor SDK: подключение к нативным сенсорным API Galaxy Watch
-- [ ] Samsung Health Data SDK: подключение реального Health Connect / Samsung Health Data API вместо мока
-- [ ] Персистентность: Room SQLite вместо `InMemory*`
-- [ ] Транспорт телефон↔часы: Wearable Data Layer (`MessageClient` / `DataClient`)
-- [ ] Энергопотребление и работа в фоне 8 часов
-- [ ] Валидация алгоритма на реальных данных PPG/IBI
+- [ ] **Samsung Health Sensor SDK**: реальный трекер вместо `SamsungSensorDataSourceStub` — единственный источник настоящих IBI/PPG
+- [ ] **Валидация алгоритма на реальных данных PPG/IBI** — не сделана, см. M4
+- [ ] Партнёрская заявка Samsung — нужна для распространения, не для разработки
+- [ ] Samsung Health Data SDK: реальный импорт стадий сна вместо `MockSamsungHealthDataGateway`
+- [ ] Замер энергопотребления за полную ночь на живом устройстве
+- [ ] Релизный keystore и подпись (нужны для заявки и публикации)
+- [ ] Настоящая Room-миграция вместо `fallbackToDestructiveMigration`
 
 ---
 
@@ -94,7 +96,7 @@
 
 Собственно валидация:
 - [ ] **Не заблокирована партнёрской заявкой.** Developer mode Health Sensor Service даёт настоящие IBI и PPG без одобрения Samsung — см. [SAMSUNG_HEALTH_PARTNER_GUIDE.md](docs/SAMSUNG_HEALTH_PARTNER_GUIDE.md), раздел 2
-- [ ] Исправить баг #10 — до этого любые метрики на не-Samsung источнике бессмысленны
+- [x] Исправить баг #10 — фабрикация IBI убрана, HRV исключается из скоринга при недоступности
 - [ ] Подключить реальный трекер Samsung вместо `SamsungSensorDataSourceStub`
 - [ ] Собрать ночи в пассивном режиме на своих часах
 - [ ] Посчитать реальный hit-rate против стадий Samsung Health
@@ -124,8 +126,8 @@
 | 7 | `core/algorithm/.../RemConfidenceEngine.kt` | Разрыв в `calculateMotionScore` на границе 0.05, неиспользуемый импорт | ✅ Исправлен |
 | 8 | `core/algorithm/.../NightCueDecisionEngine.kt` | Литерал `0.65` служил sentinel-значением («порог не переопределяли»): сравнение `Double` на неравенство, явно переданный `0.65` молча игнорировался в пользу профиля, семантика ломалась при смене дефолта. Заменено на `confidenceThresholdOverride: Double? = null` + `?: userProfile.confidenceThreshold`, добавлены 2 регрессионных теста | ✅ Исправлен |
 | 9 | `phoneApp/.../phone/Main.kt` | 338 строк мёртвого кода: консольный `fun main()` из JVM-прототипа остался в Android-модуле, где никогда не вызывается | ✅ Исправлен (файл удалён) |
-| 10 | `wearApp/.../sensor/SensorDataSource.kt` | **`AndroidStandardSensorDataSource` синтезирует `IbiReading`** из обычного HR-датчика: либо интервал между колбэками (артефакт частоты опроса), либо `60000/bpm` (детерминированная функция от BPM). Из этих чисел считается RMSSD/SDNN, то есть `hrv_score` — 20% веса — берётся из шума. Хуже: фабрикация обходит гардрейл достаточности данных (`ibis.size >= 5`), который вводился ровно затем, чтобы отсутствие IBI блокировало сигнал | 🔴 Критический |
-| 11 | `wearApp/.../sensor/SensorDataSource.kt` | `SamsungSensorDataSourceStub` объявляет `fidelity = SAMSUNG_CONTINUOUS_IBI`, но делегирует всё `AndroidStandardSensorDataSource`. На Galaxy Watch `WatchReadyScreen` показывает «● Samsung IBI Active» при неподключённом SDK | 🟡 Средний |
+| 10 | `wearApp/.../sensor/SensorDataSource.kt` | **`AndroidStandardSensorDataSource` синтезирует `IbiReading`** из обычного HR-датчика: либо интервал между колбэками (артефакт частоты опроса), либо `60000/bpm` (детерминированная функция от BPM). Из этих чисел считается RMSSD/SDNN, то есть `hrv_score` — 20% веса — берётся из шума. Хуже: фабрикация обходит гардрейл достаточности данных (`ibis.size >= 5`), который вводился ровно затем, чтобы отсутствие IBI блокировало сигнал | ✅ Исправлен |
+| 11 | `wearApp/.../sensor/SensorDataSource.kt` | `SamsungSensorDataSourceStub` объявляет `fidelity = SAMSUNG_CONTINUOUS_IBI`, но делегирует всё `AndroidStandardSensorDataSource`. На Galaxy Watch `WatchReadyScreen` показывает «● Samsung IBI Active» при неподключённом SDK | ✅ Исправлен |
 
 ## ⚠️ Внешние блокеры и риски
 

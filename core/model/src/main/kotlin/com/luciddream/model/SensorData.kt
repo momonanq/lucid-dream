@@ -41,6 +41,15 @@ data class SensorWindow(
     val hrSampleCount: Int = 20,
     val ibiSampleCount: Int = 20,
     val motionSampleCount: Int = 20,
-    val isDataSufficient: Boolean = true
+    val isDataSufficient: Boolean = true,
+    /**
+     * Whether [rmssd] and [sdnn] were derived from real inter-beat intervals.
+     *
+     * False when the sensor source cannot measure beat-to-beat timing at all — an ordinary
+     * Wear OS heart rate sensor reports averaged BPM and nothing else. In that case the HRV
+     * figures carry no information and must be excluded from scoring rather than fed in as if
+     * they were measured.
+     */
+    val hrvAvailable: Boolean = true
 )
 

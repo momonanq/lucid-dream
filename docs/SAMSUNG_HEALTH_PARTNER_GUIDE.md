@@ -54,14 +54,23 @@ Samsung Health Sensor SDK даёт:
 
 Официальная инструкция: <https://developer.samsung.com/health/sensor/guide/developer-mode.html>
 
-1. Скачайте SDK со страницы <https://developer.samsung.com/health/sensor> (регистрация в
-   Samsung Developer Portal бесплатна, заявка не требуется).
+1. Скачайте SDK со страницы <https://developer.samsung.com/health/sensor/process.html>
+   (на 2026-09-04 — **Samsung Health Sensor SDK v1.4.1**, ~70 КБ). Регистрация в Samsung
+   Developer Portal бесплатна, партнёрская заявка не требуется.
 2. Подключите AAR в `wearApp/libs/` и добавьте зависимость в `wearApp/build.gradle.kts`.
-3. Включите developer mode службы Health Platform на часах по инструкции выше.
+3. Включите developer mode службы Health Sensor Service на часах по инструкции Samsung.
 4. Замените `SamsungSensorDataSourceStub` на реальную реализацию поверх `HealthTrackingService`.
+
+**Нужны физические часы.** Из документации: «A Galaxy Watch is also needed to develop and run the
+app». Эмулятор Wear OS этот SDK не поддерживает.
 
 Ограничение прямо из документации: режим предназначен **только для тестирования и отладки**,
 приложение работает лишь пока режим включён, и это не путь для конечных пользователей.
+
+> [!CAUTION]
+> Samsung отдельно требует: *«Do not share the developer mode guide with app users»*. В этом
+> репозитории — и вообще в любом публичном месте — можно **ссылаться** на инструкцию Samsung, но
+> нельзя копировать её шаги. Репозиторий публичный, так что это не формальность.
 
 Для сбора пилотных данных по [PILOT_STUDY_PROTOCOL.md](PILOT_STUDY_PROTOCOL.md) этого достаточно,
 если участники — вы и коллеги с собственными часами.

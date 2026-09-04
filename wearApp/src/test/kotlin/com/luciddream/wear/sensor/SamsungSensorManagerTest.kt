@@ -88,4 +88,67 @@ class SamsungSensorManagerTest {
         assertEquals(0, window.ibiSampleCount)
         assertFalse(window.isDataSufficient, "Window with missing HR and IBI must be insufficient")
     }
+
+    /** Minimal source used only to pin the fidelity the manager reads. */
+    private class FakeSource(override val fidelity: SourceFidelity) : SensorDataSource {
+        override fun start(callback: SensorDataCallback) = Unit
+        override fun stop() = Unit
+        override fun setSamplingPolicy(policy: SamplingPolicy) = Unit
+    }
+
+    private fun feedHrAndMotion(manager: SamsungSensorManager, start: Long, count: Int = 10) {
+        for (i in 0 until count) {
+            val t = start + (i * 2000L)
+            manager.onHeartRateSample(HeartRateReading(t, 58.0))
+            manager.onMotionSample(MotionReading(t, 0.01f, 0.01f, 9.8f))
+        }
+    }
+
+    @Test
+    fun `a source that cannot measure IBI still yields a usable window, marked without HRV`() = runTest {
+        val manager = SamsungSensorManager(FakeSource(SourceFidelity.ANDROID_STANDARD_HR))
+        manager.startTracking()
+        feedHrAndMotion(manager, 100000L)
+
+        val window = manager.aggregateWindow(100000L, 160000L)
+
+        assertTrue(
+            window.isDataSufficient,
+            "An ordinary Wear OS HR sensor has not failed just because it cannot report IBI"
+        )
+        assertFalse(window.hrvAvailable, "HRV must be marked unavailable, not silently assumed")
+        assertEquals(0, window.ibiSampleCount)
+        assertEquals(0.0, window.rmssd, 0.001)
+    }
+
+    @Test
+    fun `a source that promises IBI and delivers none is treated as a sensor failure`() = runTest {
+        val manager = SamsungSensorManager(FakeSource(SourceFidelity.SAMSUNG_CONTINUOUS_IBI))
+        manager.startTracking()
+        feedHrAndMotion(manager, 100000L)
+
+        val window = manager.aggregateWindow(100000L, 160000L)
+
+        assertFalse(
+            window.isDataSufficient,
+            "Missing IBI from a source that provides it means the tracker dropped out"
+        )
+        assertFalse(window.hrvAvailable)
+    }
+
+    @Test
+    fun `a source with real IBI reports HRV as available`() = runTest {
+        val manager = SamsungSensorManager(FakeSource(SourceFidelity.SAMSUNG_CONTINUOUS_IBI))
+        manager.startTracking()
+        feedHrAndMotion(manager, 100000L)
+        for (i in 0 until 10) {
+            manager.onIbiSample(IbiReading(100000L + (i * 2000L), 1030.0 + (i % 3) * 12.0))
+        }
+
+        val window = manager.aggregateWindow(100000L, 160000L)
+
+        assertTrue(window.isDataSufficient)
+        assertTrue(window.hrvAvailable)
+        assertTrue(window.rmssd > 0.0, "Real intervals must produce a real RMSSD")
+    }
 }

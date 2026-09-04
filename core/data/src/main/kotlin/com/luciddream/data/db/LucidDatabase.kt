@@ -17,9 +17,10 @@ import androidx.room.TypeConverters
         QueuedSyncEventEntity::class
     ],
     // v2 adds UserProfileEntity.screening (onboarding safety screening).
+    // v3 adds SensorWindowEntity.hrvAvailable (whether HRV came from real inter-beat intervals).
     // fallbackToDestructiveMigration below is the project's pre-release policy: the schema change
     // wipes local data instead of migrating it. Replace with a real Migration before any release.
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

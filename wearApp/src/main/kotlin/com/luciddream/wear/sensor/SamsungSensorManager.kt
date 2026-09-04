@@ -120,7 +120,18 @@ class SamsungSensorManager(
         // Motion: >= 3 samples to evaluate movement variance
         // HR: >= 3 samples to calculate average/min/max
         // IBI: >= 5 samples to compute RMSSD/SDNN meaningfully
-        val isSufficient = hrs.size >= 3 && ibis.size >= 5 && motions.size >= 3
+        //
+        // The IBI requirement is conditional on the source being able to measure it at all.
+        // A source that claims IBI and delivers none has failed, and the window is unusable.
+        // A source that never provides IBI (an ordinary Wear OS heart rate sensor) has not
+        // failed — it simply cannot support HRV, so the window stays usable with hrvAvailable
+        // false and RemConfidenceEngine drops that term instead of scoring a fabricated one.
+        val sourceProvidesIbi = currentFidelity.providesIbi
+        val hasEnoughIbi = ibis.size >= MIN_IBI_SAMPLES
+        val isSufficient = hrs.size >= MIN_HR_SAMPLES &&
+            motions.size >= MIN_MOTION_SAMPLES &&
+            (!sourceProvidesIbi || hasEnoughIbi)
+        val hrvAvailable = sourceProvidesIbi && hasEnoughIbi
 
         val meanHr = if (hrs.isNotEmpty()) hrs.map { it.bpm }.average() else 0.0
         val minHr = if (hrs.isNotEmpty()) hrs.minOf { it.bpm } else 0.0
@@ -173,10 +184,17 @@ class SamsungSensorManager(
             hrSampleCount = hrs.size,
             ibiSampleCount = ibis.size,
             motionSampleCount = motions.size,
-            isDataSufficient = isSufficient
+            isDataSufficient = isSufficient,
+            hrvAvailable = hrvAvailable
         )
 
         _windowFlow.emit(window)
         return window
+    }
+
+    private companion object {
+        const val MIN_HR_SAMPLES = 3
+        const val MIN_IBI_SAMPLES = 5
+        const val MIN_MOTION_SAMPLES = 3
     }
 }

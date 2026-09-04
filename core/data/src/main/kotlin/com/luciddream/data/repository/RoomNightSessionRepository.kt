@@ -139,7 +139,8 @@ class RoomNightSessionRepository(
             hrSampleCount = hrSampleCount,
             ibiSampleCount = ibiSampleCount,
             motionSampleCount = motionSampleCount,
-            isDataSufficient = isDataSufficient
+            isDataSufficient = isDataSufficient,
+            hrvAvailable = hrvAvailable
         )
     }
 
@@ -161,7 +162,8 @@ class RoomNightSessionRepository(
             hrSampleCount = hrSampleCount,
             ibiSampleCount = ibiSampleCount,
             motionSampleCount = motionSampleCount,
-            isDataSufficient = isDataSufficient
+            isDataSufficient = isDataSufficient,
+            hrvAvailable = hrvAvailable
         )
     }
 
