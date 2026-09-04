@@ -6,7 +6,8 @@ import org.junit.jupiter.api.Test
 
 class NightCueDecisionEngineTest {
 
-    private val engine = NightCueDecisionEngine(defaultConfidenceThreshold = 0.65)
+    // Mirrors production wiring in WatchNightTrackingService: no override, personalized threshold applies.
+    private val engine = NightCueDecisionEngine()
 
     private fun createDummyWindow(
         movement: Double = 0.04,
@@ -170,5 +171,59 @@ class NightCueDecisionEngineTest {
 
         val isSpike = engine.checkForWakeSpike(pre, postSpike)
         assertTrue(isSpike, "Should identify wake spike from high motion and HR jump")
+    }
+
+    private fun evaluateAtConfidence(
+        engineUnderTest: NightCueDecisionEngine,
+        profile: UserProfile,
+        confidence: Double
+    ): NightCueDecisionEngine.Decision {
+        val session = NightSession(
+            id = "s1",
+            startTimeMs = 0,
+            mode = NightMode.TLR,
+            status = SessionStatus.RUNNING,
+            cuesPlanned = 5,
+            cuesTriggered = 0
+        )
+        return engineUnderTest.evaluate(
+            session = session,
+            currentWindow = createDummyWindow(movement = 0.02),
+            minutesFromSleepStart = 310,
+            confidence = confidence,
+            userProfile = profile
+        )
+    }
+
+    @Test
+    fun `applies calibrated profile threshold when no override is supplied`() {
+        val strictProfile = UserProfile(confidenceThreshold = 0.88)
+
+        // Below the personalized threshold but above the engine's former hardcoded 0.65.
+        val suppressed = evaluateAtConfidence(engine, strictProfile, confidence = 0.80)
+        assertTrue(
+            suppressed is NightCueDecisionEngine.Decision.Suppressed,
+            "Calibrated threshold 0.88 must suppress a 0.80 confidence, got: $suppressed"
+        )
+
+        val triggered = evaluateAtConfidence(engine, strictProfile, confidence = 0.90)
+        assertTrue(triggered is NightCueDecisionEngine.Decision.TriggerCue)
+    }
+
+    @Test
+    fun `honours an explicit override even when it equals the previous sentinel value`() {
+        // Regression: 0.65 used to be a sentinel meaning "not overridden", so an explicit
+        // 0.65 was silently discarded in favour of the profile value.
+        val permissiveProfile = UserProfile(confidenceThreshold = 0.50)
+        val pinnedEngine = NightCueDecisionEngine(confidenceThresholdOverride = 0.65)
+
+        val suppressed = evaluateAtConfidence(pinnedEngine, permissiveProfile, confidence = 0.60)
+        assertTrue(
+            suppressed is NightCueDecisionEngine.Decision.Suppressed,
+            "Explicit override 0.65 must win over profile threshold 0.50, got: $suppressed"
+        )
+
+        val triggered = evaluateAtConfidence(pinnedEngine, permissiveProfile, confidence = 0.70)
+        assertTrue(triggered is NightCueDecisionEngine.Decision.TriggerCue)
     }
 }

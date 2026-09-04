@@ -106,6 +106,8 @@
 | 5 | `core/algorithm/.../CalibrationEngine.kt` | Петля персонализации не была замкнута (порог и базовые показатели не обновлялись) | ✅ Исправлен |
 | 6 | `core/data/.../repository/NightSessionRepository.kt` | `getActiveSession()` возвращал разовый статичный снимок вместо реактивного Flow | ✅ Исправлен |
 | 7 | `core/algorithm/.../RemConfidenceEngine.kt` | Разрыв в `calculateMotionScore` на границе 0.05, неиспользуемый импорт | ✅ Исправлен |
+| 8 | `core/algorithm/.../NightCueDecisionEngine.kt` | Литерал `0.65` служил sentinel-значением («порог не переопределяли»): сравнение `Double` на неравенство, явно переданный `0.65` молча игнорировался в пользу профиля, семантика ломалась при смене дефолта. Заменено на `confidenceThresholdOverride: Double? = null` + `?: userProfile.confidenceThreshold`, добавлены 2 регрессионных теста | ✅ Исправлен |
+| 9 | `phoneApp/.../phone/Main.kt` | 338 строк мёртвого кода: консольный `fun main()` из JVM-прототипа остался в Android-модуле, где никогда не вызывается | ✅ Исправлен (файл удалён) |
 
 ## ⚠️ Внешние блокеры и риски
 

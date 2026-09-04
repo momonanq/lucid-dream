@@ -1,14 +1,18 @@
 package com.luciddream.algorithm
 
 import com.luciddream.model.*
-import kotlin.math.abs
 
 /**
  * Deterministic decision engine responsible for deciding whether to deliver a nocturnal cue.
  * Enforces safety guardrails, cooldown periods, and wake-spike abort criteria.
  */
 class NightCueDecisionEngine(
-    private val defaultConfidenceThreshold: Double = 0.65,
+    /**
+     * Fixed threshold that overrides the per-user calibrated one.
+     * Leave null in production so the personalized [UserProfile.confidenceThreshold] applies;
+     * set it only to pin a threshold in tests or diagnostics.
+     */
+    private val confidenceThresholdOverride: Double? = null,
     private val wakeSpikeMovementThreshold: Double = 0.40,
     private val wakeSpikeHrSurgePercent: Double = 0.25 // 25% surge over window baseline
 ) {
@@ -77,7 +81,7 @@ class NightCueDecisionEngine(
         }
 
         // Safety Guardrail 4: Confidence threshold check (uses user profile personalized threshold)
-        val activeThreshold = if (defaultConfidenceThreshold != 0.65) defaultConfidenceThreshold else userProfile.confidenceThreshold
+        val activeThreshold = confidenceThresholdOverride ?: userProfile.confidenceThreshold
         if (confidence < activeThreshold) {
             return Decision.Suppressed(
                 "Confidence score $confidence is below threshold $activeThreshold"
