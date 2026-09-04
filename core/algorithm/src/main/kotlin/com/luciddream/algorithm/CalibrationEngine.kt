@@ -100,6 +100,13 @@ class CalibrationEngine {
             }
         }
 
+        // 4. Low accuracy (cues fired in Non-REM or Awake) -> tighten confidence threshold
+        var updatedConfidenceThreshold = currentProfile.confidenceThreshold
+        if (accuracyProxy < 0.50 && (nonRemHits > 0 || awakeHits > 0)) {
+            updatedConfidenceThreshold = min(0.85, updatedConfidenceThreshold + 0.05)
+            recommendations.add("Повышен порог уверенности детектора REM (${String.format(java.util.Locale.US, "%.2f", updatedConfidenceThreshold)}) для снижения ложных срабатываний в NREM.")
+        }
+
         // Calculate average HR from session sensor windows to refine baseline
         val sessionMeanHr = session.sensorWindows.map { it.meanHr }.filter { it > 40 && it < 100 }.average()
         val updatedBaselineHr = if (!sessionMeanHr.isNaN()) {
@@ -108,10 +115,23 @@ class CalibrationEngine {
             currentProfile.baselineHeartRate
         }
 
+        // Calculate average RMSSD from valid session sensor windows to refine baseline IBI variance
+        val sessionMeanRmssd = session.sensorWindows
+            .filter { it.isDataSufficient && it.rmssd in 10.0..150.0 }
+            .map { it.rmssd }
+            .average()
+        val updatedBaselineIbiVar = if (!sessionMeanRmssd.isNaN()) {
+            (currentProfile.baselineIbiVariance * 0.7) + (sessionMeanRmssd * 0.3)
+        } else {
+            currentProfile.baselineIbiVariance
+        }
+
         val adaptedProfile = currentProfile.copy(
             preferredHapticIntensity = updatedHaptic,
             cooldownMinutes = updatedCooldown,
             baselineHeartRate = updatedBaselineHr,
+            baselineIbiVariance = updatedBaselineIbiVar,
+            confidenceThreshold = updatedConfidenceThreshold,
             calibrationNightsCompleted = currentProfile.calibrationNightsCompleted + 1
         )
 

@@ -8,7 +8,11 @@ class NightCueDecisionEngineTest {
 
     private val engine = NightCueDecisionEngine(defaultConfidenceThreshold = 0.65)
 
-    private fun createDummyWindow(movement: Double = 0.04, hr: Double = 58.0): SensorWindow {
+    private fun createDummyWindow(
+        movement: Double = 0.04,
+        hr: Double = 58.0,
+        sufficient: Boolean = true
+    ): SensorWindow {
         return SensorWindow(
             startTimestampMs = 100000,
             endTimestampMs = 160000,
@@ -21,8 +25,36 @@ class NightCueDecisionEngineTest {
             sdnn = 45.0,
             movementIndex = movement,
             sampleCount = 60,
-            confidence = 0.85
+            confidence = 0.85,
+            hrSampleCount = if (sufficient) 20 else 0,
+            ibiSampleCount = if (sufficient) 20 else 0,
+            motionSampleCount = if (sufficient) 20 else 0,
+            isDataSufficient = sufficient
         )
+    }
+
+    @Test
+    fun `suppresses cues when window has insufficient sensor data even in late night`() {
+        val session = NightSession(
+            id = "s1",
+            startTimeMs = 0,
+            mode = NightMode.WATCH_ASSIST,
+            status = SessionStatus.RUNNING,
+            earliestCueMinutes = 90
+        )
+
+        val windowWithNoData = createDummyWindow(sufficient = false)
+        val decision = engine.evaluate(
+            session = session,
+            currentWindow = windowWithNoData,
+            minutesFromSleepStart = 320, // 5+ hours into sleep
+            confidence = 0.90,
+            userProfile = UserProfile()
+        )
+
+        assertTrue(decision is NightCueDecisionEngine.Decision.Suppressed)
+        val reason = (decision as NightCueDecisionEngine.Decision.Suppressed).reason
+        assertTrue(reason.contains("Insufficient sensor data"), "Reason should indicate data insufficiency, got: $reason")
     }
 
     @Test

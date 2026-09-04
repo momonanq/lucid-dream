@@ -43,6 +43,13 @@ class NightCueDecisionEngine(
             return Decision.Suppressed("Night cues disabled in Beginner mode")
         }
 
+        // Safety Guardrail: Strict data sufficiency requirement (prevents cues on sensor failure / disconnect)
+        if (!currentWindow.isDataSufficient) {
+            return Decision.Suppressed(
+                "Insufficient sensor data in window (HR: ${currentWindow.hrSampleCount}, IBI: ${currentWindow.ibiSampleCount}, Motion: ${currentWindow.motionSampleCount})"
+            )
+        }
+
         // Safety Guardrail 1: Do not disrupt early sleep architecture (N3 / slow-wave sleep in first 90m)
         val earliestAllowed = session.earliestCueMinutes.toLong()
         if (minutesFromSleepStart < earliestAllowed) {
@@ -69,10 +76,11 @@ class NightCueDecisionEngine(
             }
         }
 
-        // Safety Guardrail 4: Confidence threshold check
-        if (confidence < defaultConfidenceThreshold) {
+        // Safety Guardrail 4: Confidence threshold check (uses user profile personalized threshold)
+        val activeThreshold = if (defaultConfidenceThreshold != 0.65) defaultConfidenceThreshold else userProfile.confidenceThreshold
+        if (confidence < activeThreshold) {
             return Decision.Suppressed(
-                "Confidence score $confidence is below threshold $defaultConfidenceThreshold"
+                "Confidence score $confidence is below threshold $activeThreshold"
             )
         }
 

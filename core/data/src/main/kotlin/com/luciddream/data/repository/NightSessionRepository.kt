@@ -6,6 +6,7 @@ import com.luciddream.model.SessionStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 
 interface NightSessionRepository {
     fun getAllSessions(): Flow<List<NightSession>>
@@ -24,8 +25,7 @@ class InMemoryNightSessionRepository : NightSessionRepository {
     override fun getAllSessions(): Flow<List<NightSession>> = sessionsState.asStateFlow()
 
     override fun getActiveSession(): Flow<NightSession?> {
-        val active = sessionsState.value.find { it.status == SessionStatus.RUNNING }
-        return MutableStateFlow(active).asStateFlow()
+        return sessionsState.map { list -> list.find { it.status == SessionStatus.RUNNING } }
     }
 
     override suspend fun getSessionById(id: String): NightSession? {

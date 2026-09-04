@@ -32,5 +32,6 @@ data class UserProfile(
     val maxCuesPerNight: Int = 5,
     val cooldownMinutes: Int = 15,
     val earliestCueMinutesAfterOnset: Int = 90,
+    val confidenceThreshold: Double = 0.65,
     val calibrationNightsCompleted: Int = 0
 )

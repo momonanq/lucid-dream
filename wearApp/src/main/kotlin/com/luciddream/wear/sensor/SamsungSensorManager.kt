@@ -53,44 +53,62 @@ class SamsungSensorManager {
     }
 
     /**
-     * Aggregates the buffered continuous sensor metrics into a cohesive SensorWindow
-     * and clears processed items.
+     * Aggregates the buffered continuous sensor metrics into a cohesive SensorWindow.
+     * Only consumes samples up to endTimestampMs, leaving subsequent samples in the queue.
      */
     suspend fun aggregateWindow(startTimestampMs: Long, endTimestampMs: Long): SensorWindow {
         val hrs = mutableListOf<HeartRateReading>()
-        while (hrBuffer.isNotEmpty()) {
-            val r = hrBuffer.poll() ?: break
-            if (r.timestampMs in startTimestampMs..endTimestampMs) {
-                hrs.add(r)
+        while (true) {
+            val r = hrBuffer.peek() ?: break
+            if (r.timestampMs < startTimestampMs) {
+                hrBuffer.poll() // discard stale sample preceding window
+            } else if (r.timestampMs <= endTimestampMs) {
+                hrs.add(hrBuffer.poll() ?: break)
+            } else {
+                break // belongs to subsequent window; keep in queue
             }
         }
 
         val ibis = mutableListOf<IbiReading>()
-        while (ibiBuffer.isNotEmpty()) {
-            val r = ibiBuffer.poll() ?: break
-            if (r.timestampMs in startTimestampMs..endTimestampMs) {
-                ibis.add(r)
+        while (true) {
+            val r = ibiBuffer.peek() ?: break
+            if (r.timestampMs < startTimestampMs) {
+                ibiBuffer.poll() // discard stale sample preceding window
+            } else if (r.timestampMs <= endTimestampMs) {
+                ibis.add(ibiBuffer.poll() ?: break)
+            } else {
+                break // belongs to subsequent window; keep in queue
             }
         }
 
         val motions = mutableListOf<MotionReading>()
-        while (motionBuffer.isNotEmpty()) {
-            val r = motionBuffer.poll() ?: break
-            if (r.timestampMs in startTimestampMs..endTimestampMs) {
-                motions.add(r)
+        while (true) {
+            val r = motionBuffer.peek() ?: break
+            if (r.timestampMs < startTimestampMs) {
+                motionBuffer.poll() // discard stale sample preceding window
+            } else if (r.timestampMs <= endTimestampMs) {
+                motions.add(motionBuffer.poll() ?: break)
+            } else {
+                break // belongs to subsequent window; keep in queue
             }
         }
 
-        val meanHr = if (hrs.isNotEmpty()) hrs.map { it.bpm }.average() else 60.0
-        val minHr = if (hrs.isNotEmpty()) hrs.minOf { it.bpm } else meanHr
-        val maxHr = if (hrs.isNotEmpty()) hrs.maxOf { it.bpm } else meanHr
+        // Modality-specific minimum viable sample count checks:
+        // Motion: >= 3 samples to evaluate movement variance
+        // HR: >= 3 samples to calculate average/min/max
+        // IBI: >= 5 samples to compute RMSSD/SDNN meaningfully
+        val isSufficient = hrs.size >= 3 && ibis.size >= 5 && motions.size >= 3
+
+        val meanHr = if (hrs.isNotEmpty()) hrs.map { it.bpm }.average() else 0.0
+        val minHr = if (hrs.isNotEmpty()) hrs.minOf { it.bpm } else 0.0
+        val maxHr = if (hrs.isNotEmpty()) hrs.maxOf { it.bpm } else 0.0
 
         val hrStdDev = if (hrs.size > 1) {
             val variance = hrs.map { (it.bpm - meanHr).pow(2) }.average()
             sqrt(variance)
         } else 0.0
 
-        val meanIbi = if (ibis.isNotEmpty()) ibis.map { it.ibiMs }.average() else (60000.0 / meanHr)
+        val meanIbi = if (ibis.isNotEmpty()) ibis.map { it.ibiMs }.average() else 0.0
 
         // RMSSD (Root Mean Square of Successive Differences)
         val rmssd = if (ibis.size > 2) {
@@ -100,20 +118,21 @@ class SamsungSensorManager {
                 sumDiffSq += diff.pow(2)
             }
             sqrt(sumDiffSq / (ibis.size - 1))
-        } else 40.0
+        } else 0.0
 
         // SDNN (Standard deviation of NN intervals)
         val sdnn = if (ibis.size > 1) {
             val varIbi = ibis.map { (it.ibiMs - meanIbi).pow(2) }.average()
             sqrt(varIbi)
-        } else 45.0
+        } else 0.0
 
         // Movement Index: standard deviation of accelerometer magnitude + jerk
+        // When data is insufficient, DO NOT fake 0.0 (perfect stillness) which would trick REM scoring
         val movementIndex = if (motions.size > 1) {
             val meanMag = motions.map { it.magnitude }.average()
             val magVariance = motions.map { (it.magnitude - meanMag).pow(2) }.average()
             sqrt(magVariance) / 9.81 // Normalized to Gs
-        } else 0.0
+        } else if (isSufficient) 0.0 else 1.0
 
         val window = SensorWindow(
             startTimestampMs = startTimestampMs,
@@ -126,7 +145,12 @@ class SamsungSensorManager {
             rmssd = rmssd,
             sdnn = sdnn,
             movementIndex = movementIndex,
-            sampleCount = hrs.size + ibis.size + motions.size
+            sampleCount = hrs.size + ibis.size + motions.size,
+            confidence = 0.0,
+            hrSampleCount = hrs.size,
+            ibiSampleCount = ibis.size,
+            motionSampleCount = motions.size,
+            isDataSufficient = isSufficient
         )
 
         _windowFlow.emit(window)

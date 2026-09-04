@@ -37,5 +37,10 @@ data class SensorWindow(
     val sdnn: Double,  // Standard Deviation of NN intervals
     val movementIndex: Double, // Aggregated movement score in window (0.0 = still, 1.0+ = active)
     val sampleCount: Int,
-    val confidence: Double = 0.0
+    val confidence: Double = 0.0,
+    val hrSampleCount: Int = 0,
+    val ibiSampleCount: Int = 0,
+    val motionSampleCount: Int = 0,
+    val isDataSufficient: Boolean = true
 )
+

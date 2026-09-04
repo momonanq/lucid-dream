@@ -1,7 +1,6 @@
 package com.luciddream.algorithm
 
 import com.luciddream.model.SensorWindow
-import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 
@@ -11,7 +10,7 @@ import kotlin.math.min
  * Grounded in sleep neurobiology:
  * 1. Circadian REM propensity increases markedly across the sleep period (maximal > 4-5 hours).
  * 2. Skeletal muscle atonia results in prolonged periods of minimal gross motor movement.
- * 3. Phasic REM exhibits autonomic bursts (elevated HRV variance / RMSSD compared to N3).
+ * 3. Phasic REM exhibits autonomic turbulence with fluctuating IBI variance against stable N3 baseline.
  * 4. Multi-window persistence filters out fleeting sensory noise.
  */
 class RemConfidenceEngine(
@@ -54,12 +53,12 @@ class RemConfidenceEngine(
     /**
      * Calculates motion score based on motor stillness.
      * REM sleep has strong muscle atonia; higher movement indicates awakening or stage shift.
-     * movementIndex ~0.0 -> Score 1.0; movementIndex >= 0.5 -> Score 0.0
+     * Smooth, continuous monotonic transition from 1.0 (stillness <= 0.05) down to 0.0 (movement >= 0.45).
      */
     fun calculateMotionScore(movementIndex: Double): Double {
         return when {
             movementIndex <= 0.05 -> 1.0
-            movementIndex <= 0.15 -> 0.85 - ((movementIndex - 0.05) / 0.10) * 0.35
+            movementIndex <= 0.15 -> 1.0 - ((movementIndex - 0.05) / 0.10) * 0.50
             movementIndex <= 0.35 -> 0.50 - ((movementIndex - 0.15) / 0.20) * 0.40
             else -> max(0.0, 0.10 - (movementIndex - 0.35))
         }
@@ -67,21 +66,21 @@ class RemConfidenceEngine(
 
     /**
      * Calculates HRV score based on RMSSD / SDNN variance matching REM autonomic profile.
-     * Deep sleep (N3) shows very low RMSSD variance (high parasympathetic tone with slow steady HR).
-     * REM shows fluctuating autonomic balance (moderate-high RMSSD, irregular IBI bursts).
+     * Slow-wave sleep (N3) shows stable parasympathetic dominance (high stable RMSSD, regular respiratory sinus arrhythmia).
+     * REM shows transient autonomic turbulence with fluctuating IBI bursts.
      */
     fun calculateHrvScore(
         window: SensorWindow,
         userBaselineHr: Double,
         userBaselineIbiVar: Double
     ): Double {
-        if (window.sampleCount < 5) return 0.4 // fallback on sparse data
+        if (window.ibiSampleCount < 5) return 0.4 // fallback on sparse IBI data
 
         // Check if HR is within reasonable sleep band (not awake surge, not extreme bradycardia)
         val hrDiff = kotlin.math.abs(window.meanHr - userBaselineHr)
         val hrPenalty = if (hrDiff > 25.0) 0.3 else 1.0
 
-        // REM autonomic proxy: RMSSD is elevated above quiet N3 baseline
+        // REM autonomic proxy: RMSSD relative to user baseline
         val targetRmssd = max(20.0, userBaselineIbiVar)
         val ratio = window.rmssd / targetRmssd
 
@@ -114,6 +113,16 @@ class RemConfidenceEngine(
         userBaselineHr: Double = 60.0,
         userBaselineIbiVar: Double = 45.0
     ): ConfidenceBreakdown {
+        if (!currentWindow.isDataSufficient) {
+            return ConfidenceBreakdown(
+                timeScore = 0.0,
+                motionScore = 0.0,
+                hrvScore = 0.0,
+                consistencyScore = 0.0,
+                compositeScore = 0.0
+            )
+        }
+
         val timeScore = calculateTimeScore(minutesFromOnset)
         val motionScore = calculateMotionScore(currentWindow.movementIndex)
         val hrvScore = calculateHrvScore(currentWindow, userBaselineHr, userBaselineIbiVar)

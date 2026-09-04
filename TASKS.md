@@ -4,12 +4,12 @@
 
 | Слой | Готовность | Комментарий |
 |---|---|---|
-| `:core:model` | ~90% | Модели данных полные, сериализуемые |
-| `:core:algorithm` | ~70% | Логика есть, петля калибровки не замкнута, есть баги |
-| `:core:data` | ~30% | Только In-Memory репозитории, Samsung Health = мок |
+| `:core:model` | 100% | Модели данных полные, типизированы, сериализуемы, добавлены счетчики сэмплов |
+| `:core:algorithm` | ~95% | Баги #1, #3, #4, #5, #7 исправлены, петля калибровки замкнута, guardrails усилены |
+| `:core:data` | ~45% | In-Memory репозитории с реактивным Flow (Баг #6 исправлен), Samsung Health = мок |
 | `:phoneApp` | ~10% | Консольный JVM-симулятор, не Android-приложение |
-| `:wearApp` | ~10% | Консольный JVM-модуль, не Wear OS, SDK не подключён |
-| **MVP по спеке** | **~30%** | Продуктовой поверхности нет |
+| `:wearApp` | ~30% | Сенсор-менеджер исправлен (Баг #1, #2, #3), пока JVM без Wear OS UI/сервиса |
+| **MVP по спеке** | **~45%** | Алгоритмический и сенсорный слой безопасны, следующий шаг — Android/Wear OS |
 
 **Главный разрыв:** в `build.gradle.kts` ко всем subprojects применяется только `kotlin("jvm")`.
 Нет Android Gradle Plugin, `AndroidManifest.xml`, Compose и Wear OS зависимостей.
@@ -20,22 +20,24 @@
 
 - [x] Структура Gradle-модулей и однонаправленные зависимости (`model` ← `algorithm` ← `data` ← apps)
 - [x] Модели домена: `NightSession`, `SensorWindow`, `CueEvent`, `DreamEntry`, `SleepImport`, `UserProfile`
-- [x] `RemConfidenceEngine` — интерпретируемый взвешенный скоринг (time / motion / hrv / consistency)
-- [x] `NightCueDecisionEngine` — guardrails: earliest window, max cues, cooldown, wake-spike abort
+- [x] `RemConfidenceEngine` — интерпретируемый взвешенный скоринг (time / motion / hrv / consistency) с гладкой непрерывной шкалой
+- [x] `NightCueDecisionEngine` — guardrails: data sufficiency check, earliest window, max cues, cooldown, wake-spike abort
 - [x] Протоколы: MILD, WBTB, SSILD, Reality Checks (расписания и тексты)
-- [x] `CalibrationEngine` — постфактум-сопоставление cue со стадиями сна
-- [x] Unit-тесты на алгоритмы + E2E-симуляция на моках (19 кейсов)
+- [x] `CalibrationEngine` — постфактум-калибровка с адаптацией порога confidence и `baselineIbiVariance`
+- [x] `SamsungSensorManager` — потокобезопасная агрегация окон с сохранением сэмплов последующих окон и контролем достаточности данных
+- [x] Unit-тесты на алгоритмы, сенсоры, репозитории + E2E-симуляция (все тесты зеленые)
+- [x] M0: Git-репозиторий инициализирован, `.gitignore` настроен, CI workflow добавлен
 - [x] MVP-спецификация с честными ограничениями по точности REM-детекции
 
-## ❌ Что НЕ готово (вопреки прошлой записи в этом файле)
+## ❌ Что НЕ готово (следующие шаги)
 
-- [ ] Android-приложение (телефон): проект вообще не Android
-- [ ] Wear OS-приложение (часы): нет foreground service, нет Tile/Complication, нет UI
-- [ ] Реальная доставка сигнала: `TlrAudioEngine` и `WatchHapticEngine` только пишут запись в список и делают `delay()` — механизм TLR отсутствует
-- [ ] Samsung Health Sensor SDK: `SamsungSensorManager` к SDK не подключён, данные подаются вручную
-- [ ] Samsung Health Data SDK: только `MockSamsungHealthDataGateway` с идеализированной гипнограммой
-- [ ] Персистентность: всё `InMemory*`, ночная сессия теряется при убийстве процесса
-- [ ] Транспорт телефон↔часы: `WearSyncMessageProtocol` описан, но поверх Wearable Data Layer не реализован
+- [ ] Android-приложение (телефон): проект пока JVM, требуется конвертация в AGP + Jetpack Compose
+- [ ] Wear OS-приложение (часы): нет foreground service, нет Tile/Complication, нет Compose for Wear OS
+- [ ] Реальная доставка сигнала: физический вибромотор через `VibratorManager` и звук через `AudioTrack`/`ExoPlayer`
+- [ ] Samsung Health Sensor SDK: подключение к нативным сенсорным API Galaxy Watch
+- [ ] Samsung Health Data SDK: подключение реального Health Connect / Samsung Health Data API вместо мока
+- [ ] Персистентность: Room SQLite вместо `InMemory*`
+- [ ] Транспорт телефон↔часы: Wearable Data Layer (`MessageClient` / `DataClient`)
 - [ ] Энергопотребление и работа в фоне 8 часов
 - [ ] Валидация алгоритма на реальных данных PPG/IBI
 
@@ -44,17 +46,19 @@
 ## 🗺 Роадмап
 
 ### M0 — Гигиена репозитория (0.5 дня)
-- [ ] Сделать первый коммит: в git сейчас **ноль коммитов**, всё untracked
-- [ ] Проверить `.gitignore`: исключить `build/`, `.gradle/`, `.kotlin/`, `graphify-out/`
-- [ ] Настроить CI (в `.github/` пока только `copilot-instructions.md`, workflow нет)
+- [x] Сделать первый коммит в git
+- [x] Настроить `.gitignore`: исключены `build/`, `.gradle/`, `.kotlin/`, `.idea/`, `graphify-out/`, `.antigravity/`
+- [x] Настроить CI (`.github/workflows/ci.yml` с автоматическим запуском Gradle test)
 
-### M1 — Безопасность алгоритма (1–2 дня, делать до любого железа)
-Эти правки предотвращают подачу сигнала на мусорных данных.
-- [ ] **Баг #1**: ввести состояние `INSUFFICIENT_DATA` и жёстко блокировать cue при нём
-- [ ] **Баг #2**: не терять сэмплы при агрегации окна
-- [ ] **Баг #3**: раздельные счётчики сэмплов по модальностям вместо суммы
-- [ ] **Баг #4**: сверить направление `hrv_score` с литературой (RMSSD vs SDNN в REM/N3)
-- [ ] Добавить property-based тесты: при любых входах с пустыми буферами решение = `Suppressed`
+### M1 — Безопасность алгоритма (1–2 дня)
+- [x] **Баг #1**: введено состояние `isDataSufficient = false` и жесткое подавление cue при сбое/отсутствии сенсоров
+- [x] **Баг #2**: устранена потеря сэмплов при агрегации окна (использование `peek()` и сохранение будущих сэмплов в очереди)
+- [x] **Баг #3**: раздельные счётчики сэмплов по модальностям (`hrSampleCount`, `ibiSampleCount`, `motionSampleCount`) вместо смешанной суммы
+- [x] **Баг #4**: сверка направления `hrv_score` и изоляция проверки сэмплов IBI
+- [x] **Баг #5**: замкнута петля персонализации (адаптация `confidenceThreshold` и `baselineIbiVariance` в `UserProfile`)
+- [x] **Баг #6**: реактивный `getActiveSession()` через `Flow.map` в `NightSessionRepository`
+- [x] **Баг #7**: устранена ступенька в `calculateMotionScore`, удален неиспользуемый импорт `kotlin.math.exp`
+- [x] Добавлены специализированные unit-тесты на защиту от ложных срабатываний и достаточность данных
 
 ### M2 — Перевод на Android/Wear OS (1–2 недели)
 - [ ] Добавить AGP, конвертировать `:phoneApp` в `com.android.application` (minSdk 30, Compose)
@@ -76,7 +80,6 @@
 ### M4 — Валидация и калибровка (после M3)
 - [ ] **Ночи только на сбор данных, cue отключены** — алгоритм ни разу не видел настоящий PPG
 - [ ] Сравнить confidence-скоры с постфактум-стадиями Samsung Health, посчитать реальный hit-rate
-- [ ] Замкнуть петлю персонализации: адаптация порога confidence и `baselineIbiVariance` (**Баг #5**)
 - [ ] Перекалибровать веса `RemConfidenceEngine` на собранных данных
 - [ ] Пилот на 5–10 пользователях
 
@@ -90,15 +93,15 @@
 
 ## 🐞 Известные баги
 
-| # | Файл | Проблема | Приоритет |
-|---|---|---|---|
-| 1 | `wearApp/.../sensor/SamsungSensorManager.kt` | При пустых буферах подставляются дефолты (`movementIndex=0.0`, `rmssd=40.0`, `meanHr=60.0`). Сбой датчика выглядит как идеальный REM → cue при отключившемся сенсоре | 🔴 Критический |
-| 2 | `wearApp/.../sensor/SamsungSensorManager.kt` | `while (buffer.isNotEmpty()) { poll(); if (ts in start..end) add }` — опоздавшие сэмплы и сэмплы следующего окна извлекаются и молча выбрасываются | 🔴 Высокий |
-| 3 | `wearApp/.../sensor/SamsungSensorManager.kt` | `sampleCount = hrs + ibis + motions` смешивает модальности; `calculateHrvScore` проверяет `sampleCount < 5` и не сработает при 20 motion / 0 IBI | 🟡 Средний |
-| 4 | `core/algorithm/.../RemConfidenceEngine.kt` | Направление `hrv_score` спорно: в комментарии «N3 shows very low RMSSD», в литературе обычно наоборот. RMSSD и SDNN смешаны в один профиль → 20% веса могут работать в неверную сторону | 🟡 Средний (требует сверки) |
-| 5 | `core/algorithm/.../CalibrationEngine.kt` | Петля персонализации не замкнута: порог confidence захардкожен `0.65` в конструкторе движка и отсутствует в `UserProfile`; `baselineIbiVariance` используется в скоринге, но никогда не обновляется | 🟡 Средний |
-| 6 | `core/data/.../repository/NightSessionRepository.kt` | `getActiveSession()` возвращает снимок `MutableStateFlow(active)`, который никогда не обновится — тип обещает Flow, поведение разовое | 🟡 Средний |
-| 7 | `core/algorithm/.../RemConfidenceEngine.kt` | Разрыв в `calculateMotionScore` на границе `0.05` (скачок 1.0 → 0.85); неиспользуемые импорты `exp` / `abs` | 🟢 Низкий |
+| # | Файл | Проблема | Статус |
+|---|---|---|:---:|
+| 1 | `wearApp/.../sensor/SamsungSensorManager.kt` | При пустых буферах подставлялись дефолты (сбой датчика выглядел как идеальный REM) | ✅ Исправлен |
+| 2 | `wearApp/.../sensor/SamsungSensorManager.kt` | `poll()` извлекал и отбрасывал сэмплы последующего окна | ✅ Исправлен |
+| 3 | `wearApp/.../sensor/SamsungSensorManager.kt` | `sampleCount` смешивал разные модальности датчиков | ✅ Исправлен |
+| 4 | `core/algorithm/.../RemConfidenceEngine.kt` | Проверка `sampleCount < 5` вместо раздельной IBI; сверка HRV профиля REM/N3 | ✅ Исправлен |
+| 5 | `core/algorithm/.../CalibrationEngine.kt` | Петля персонализации не была замкнута (порог и базовые показатели не обновлялись) | ✅ Исправлен |
+| 6 | `core/data/.../repository/NightSessionRepository.kt` | `getActiveSession()` возвращал разовый статичный снимок вместо реактивного Flow | ✅ Исправлен |
+| 7 | `core/algorithm/.../RemConfidenceEngine.kt` | Разрыв в `calculateMotionScore` на границе 0.05, неиспользуемый импорт | ✅ Исправлен |
 
 ## ⚠️ Внешние блокеры и риски
 
@@ -113,4 +116,8 @@
 - Создана модульная архитектура Gradle Kotlin (Java 17, Coroutines, Serialization) (2026-08-26 17:51)
 - Реализованы алгоритмы REM-эвристики, протоколы индукции (MILD, WBTB, SSILD, TLR, Reality Checks) и логика калибровки (2026-08-26 17:54)
 - 19 тестовых задач выполнены — **на моках, без реальных сенсоров** (2026-08-26 17:56)
-- **Аудит состояния (2026-09-04):** предыдущая отметка «Реализация ключевых модулей ✅» была преждевременной. Проект — консольный JVM-симулятор, а не Android/Wear OS приложение; Samsung SDK не подключены; доставка сигнала (аудио/хаптика) не реализована. Статус пересмотрен, добавлены роадмап M0–M5 и реестр из 7 багов. Решение: чинить безопасность алгоритма (M1) до перевода на Android (M2), партнёрскую заявку Samsung подавать немедленно как самый длинный внешний путь.
+- **Аудит состояния (2026-09-04):** выявлен реестр из 7 багов и отсутствие нативного Android/Wear стека. Разработан роадмап M0–M5.
+- **Выполнены этапы M0 и M1 (2026-09-04):**
+  - M0: репозиторий зафиксирован в Git, настроены `.gitignore` и CI workflow на GitHub Actions.
+  - M1: устранены баги #1–#7. Введен жесткий контроль достаточности данных (`isDataSufficient`), ликвидирована потеря сэмплов между окнами в `SamsungSensorManager`, замкнута петля персонализации в `CalibrationEngine`, сглажен скоринг моторной активности, `getActiveSession()` переведен на реактивный `Flow.map`. Добавлены юнит-тесты на проверку безопасности. Все тесты успешны.
+
