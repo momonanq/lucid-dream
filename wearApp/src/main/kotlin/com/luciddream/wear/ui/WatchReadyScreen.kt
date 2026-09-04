@@ -16,6 +16,7 @@ import androidx.wear.compose.material.Text
 
 @Composable
 fun WatchReadyScreen(
+    sensorFidelity: com.luciddream.wear.sensor.SourceFidelity = com.luciddream.wear.sensor.SourceFidelity.SIMULATED,
     onStartTracking: () -> Unit,
     onTestHaptic: () -> Unit,
     modifier: Modifier = Modifier
@@ -23,7 +24,7 @@ fun WatchReadyScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -35,27 +36,30 @@ fun WatchReadyScreen(
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(2.dp))
 
         Text(
-            text = "Ready for Sleep",
-            style = MaterialTheme.typography.caption1,
-            color = MaterialTheme.colors.onSurfaceVariant,
+            text = when (sensorFidelity) {
+                com.luciddream.wear.sensor.SourceFidelity.SAMSUNG_CONTINUOUS_IBI -> "● Samsung IBI Active"
+                com.luciddream.wear.sensor.SourceFidelity.ANDROID_STANDARD_HR -> "● Standard Wear OS HR"
+                com.luciddream.wear.sensor.SourceFidelity.SIMULATED -> "● Simulated Sensors"
+            },
+            style = MaterialTheme.typography.caption2,
+            color = MaterialTheme.colors.secondary,
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Button(
             onClick = onStartTracking,
             colors = ButtonDefaults.primaryButtonColors(),
-            modifier = Modifier
-                .size(64.dp)
+            modifier = Modifier.size(56.dp)
         ) {
-            Text("🌙", fontSize = 24.sp)
+            Text("🌙", fontSize = 22.sp)
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         CompactChip(
             onClick = onTestHaptic,

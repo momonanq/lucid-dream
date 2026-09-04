@@ -56,6 +56,7 @@ class WatchMainActivity : ComponentActivity() {
             MaterialTheme {
                 val isTracking by WatchTrackingForegroundService.isTracking.collectAsState()
                 val activeSession by WatchTrackingForegroundService.activeSession.collectAsState()
+                val sensorFidelity by WatchTrackingForegroundService.sensorFidelity.collectAsState()
                 val coroutineScope = rememberCoroutineScope()
                 var currentScreen by remember { mutableStateOf(WatchUiState.READY) }
                 var lastSessionId by remember { mutableStateOf<String?>(null) }
@@ -71,6 +72,7 @@ class WatchMainActivity : ComponentActivity() {
                 when (currentScreen) {
                     WatchUiState.READY -> {
                         WatchReadyScreen(
+                            sensorFidelity = sensorFidelity,
                             onStartTracking = {
                                 val intent = Intent(this@WatchMainActivity, WatchTrackingForegroundService::class.java).apply {
                                     action = WatchTrackingForegroundService.ACTION_START

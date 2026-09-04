@@ -15,7 +15,9 @@ import kotlin.math.sqrt
  * Sensor ingestion & windowing manager for Galaxy Watch.
  * Connects to Samsung Health Sensor SDK (continuous HR, IBI) and 3-axis Accelerometer.
  */
-class SamsungSensorManager {
+class SamsungSensorManager(
+    var dataSource: SensorDataSource? = null
+) : SensorDataCallback {
 
     private val hrBuffer = ConcurrentLinkedQueue<HeartRateReading>()
     private val ibiBuffer = ConcurrentLinkedQueue<IbiReading>()
@@ -26,15 +28,36 @@ class SamsungSensorManager {
 
     private var isTracking = false
 
+    val currentFidelity: SourceFidelity
+        get() = dataSource?.fidelity ?: SourceFidelity.SIMULATED
+
     fun startTracking() {
         hrBuffer.clear()
         ibiBuffer.clear()
         motionBuffer.clear()
         isTracking = true
+        dataSource?.start(this)
     }
 
     fun stopTracking() {
         isTracking = false
+        dataSource?.stop()
+    }
+
+    fun setSamplingPolicy(policy: SamplingPolicy) {
+        dataSource?.setSamplingPolicy(policy)
+    }
+
+    override fun onHeartRate(reading: HeartRateReading) {
+        onHeartRateSample(reading)
+    }
+
+    override fun onIbi(reading: IbiReading) {
+        onIbiSample(reading)
+    }
+
+    override fun onMotion(reading: MotionReading) {
+        onMotionSample(reading)
     }
 
     fun onHeartRateSample(reading: HeartRateReading) {

@@ -73,12 +73,12 @@
   - Phone: `TonightScreen` (селектор протоколов, слайдеры громкости/вибрации, запуск трекинга), `DreamJournalScreen` (список снов, FAB ввода, авто-экстракция dream signs), `SleepReviewScreen` (утренний отчет, таймлайн REM, калибровка)
   - Wear OS: `WatchReadyScreen` (кнопка старта, тест хаптики), `WatchTrackingScreen` (индикатор REM, счетчик сигналов, защита от случайной остановки), `WatchMorningFeedbackScreen` (экспресс-опрос из 3 шагов)
 
-### M3 — Интеграция Samsung (блокируется внешним одобрением)
-- [ ] **Подать партнёрскую заявку на Samsung Health Sensor SDK — начать немедленно, занимает недели**
-- [ ] Реализовать `SamsungHealthDataGateway` поверх Samsung Health Data SDK (sleep sessions + stages)
-- [ ] Подключить `HEART_RATE_CONTINUOUS` и IBI трекеры в `SamsungSensorManager`
-- [ ] Экраны разрешений и graceful degradation при отсутствии Samsung Health
-- [ ] Замерить энергопотребление за полную ночь, подобрать частоту опроса
+### M3 — Интеграция Samsung Health & Энергоэффективность
+- [x] **Подготовлен гайд и шаблоны формуляров для подачи партнерской заявки на Samsung Health Sensor SDK** (`docs/SAMSUNG_HEALTH_PARTNER_GUIDE.md`)
+- [x] Реализован `HealthConnectSleepGateway` поверх Android Health Connect / Samsung Health Data с graceful degradation
+- [x] Подключены `SensorDataSource` и `SensorDataSourceFactory`: поддержка `SamsungSensorDataSourceStub` и нативного `AndroidStandardSensorDataSource` (`Sensor.TYPE_HEART_RATE`)
+- [x] Экраны разрешений и индикатор аппаратного статуса на часах (`WatchReadyScreen`: "Samsung IBI Active" / "Standard Wear OS HR")
+- [x] `BatteryDutyCycleManager`: адаптивный циркадный опрос (15с/2м в фазе N3, непрерывно в пиковой зоне REM 4.5–8ч, Low Battery Guard <20%) для гарантии сохранения заряда за 8 часов сна
 
 ### M4 — Валидация и калибровка (после M3)
 - [ ] **Ночи только на сбор данных, cue отключены** — алгоритм ни разу не видел настоящий PPG

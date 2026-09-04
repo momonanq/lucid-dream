@@ -55,11 +55,15 @@ class WatchTrackingForegroundService : Service() {
 
         private val _activeSession = MutableStateFlow<NightSession?>(null)
         val activeSession: StateFlow<NightSession?> = _activeSession.asStateFlow()
+
+        private val _sensorFidelity = MutableStateFlow(com.luciddream.wear.sensor.SourceFidelity.SIMULATED)
+        val sensorFidelity: StateFlow<com.luciddream.wear.sensor.SourceFidelity> = _sensorFidelity.asStateFlow()
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.Default + Job())
     private var trackingJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private val dutyCycleManager = com.luciddream.wear.sensor.BatteryDutyCycleManager()
 
     private lateinit var sensorManager: SamsungSensorManager
     private lateinit var hapticEngine: AndroidWatchHapticEngine
@@ -70,7 +74,10 @@ class WatchTrackingForegroundService : Service() {
         super.onCreate()
         createNotificationChannel()
 
-        sensorManager = SamsungSensorManager()
+        val dataSource = com.luciddream.wear.sensor.SensorDataSourceFactory.create(applicationContext)
+        _sensorFidelity.value = dataSource.fidelity
+
+        sensorManager = SamsungSensorManager(dataSource)
         hapticEngine = AndroidWatchHapticEngine(applicationContext)
         trackingService = WatchNightTrackingService(
             sensorManager = sensorManager,
@@ -133,6 +140,11 @@ class WatchTrackingForegroundService : Service() {
             while (isActive) {
                 delay(60_000L) // 60s window aggregation cycle
                 val now = System.currentTimeMillis()
+                val elapsedMinutes = (now - session.startTimeMs) / 60000L
+                val battery = com.luciddream.wear.sensor.BatteryDutyCycleManager.getCurrentBatteryPercentage(applicationContext)
+                val decision = dutyCycleManager.evaluate(elapsedMinutes, battery)
+                sensorManager.setSamplingPolicy(decision.policy)
+
                 val window = trackingService.processSensorWindow(lastWindowEnd, now)
                 lastWindowEnd = now
                 _activeSession.value = trackingService.currentSession.value
