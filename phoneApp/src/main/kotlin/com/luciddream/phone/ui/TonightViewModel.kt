@@ -29,6 +29,15 @@ data class TonightUiState(
     val cuesWithheldTonight: Boolean
         get() = guardrail is SleepSafetyGuardian.Decision.RestNight
 
+    /**
+     * True when the screening specifically is what withholds cues — the one rest-night cause the
+     * user can act on, as opposed to a weekly cap or a recovery period that only time resolves.
+     */
+    val blockedByScreening: Boolean
+        get() = (guardrail as? SleepSafetyGuardian.Decision.RestNight)
+            ?.reasons
+            ?.any { it.trigger == SleepSafetyGuardian.Trigger.SCREENING_EXCLUSION } == true
+
     /** User-facing explanations for a recovery night, or advisories when cues are allowed. */
     val guardrailMessages: List<String>
         get() = when (val decision = guardrail) {

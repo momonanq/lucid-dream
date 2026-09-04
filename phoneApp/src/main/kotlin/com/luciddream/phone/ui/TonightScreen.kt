@@ -34,7 +34,9 @@ fun TonightScreen(
     viewModel: TonightViewModel,
     audioEngine: AndroidTlrAudioEngine,
     transportGateway: AndroidPhoneWearableTransportGateway,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Opens the safety screening. Offered only when the screening is what withholds cues. */
+    onOpenScreening: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
@@ -351,6 +353,14 @@ fun TonightScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
+                    }
+                    // A weekly cap or a recovery period only time resolves; the screening is the
+                    // one cause the user can act on right now.
+                    if (uiState.blockedByScreening && onOpenScreening != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        TextButton(onClick = onOpenScreening) {
+                            Text("Пройти скрининг")
+                        }
                     }
                 }
             }

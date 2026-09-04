@@ -24,6 +24,7 @@ import com.luciddream.data.repository.RoomNightSessionRepository
 import com.luciddream.data.repository.RoomUserProfileRepository
 import com.luciddream.data.samsung.MockSamsungHealthDataGateway
 import com.luciddream.data.sync.AndroidPhoneWearableTransportGateway
+import com.luciddream.model.UserProfile
 import com.luciddream.phone.audio.AndroidTlrAudioEngine
 import com.luciddream.phone.service.PhoneDependencies
 
@@ -54,6 +55,7 @@ class MainActivity : ComponentActivity() {
         val tonightVm = TonightViewModel(coordinator, sessionRepo, profileRepo)
         val journalVm = DreamJournalViewModel(journalRepo)
         val reviewVm = SleepReviewViewModel(sessionRepo, profileRepo, samsungGateway)
+        val screeningVm = ScreeningViewModel(profileRepo)
 
         setContent {
             val darkColors = darkColorScheme(
@@ -71,6 +73,28 @@ class MainActivity : ComponentActivity() {
 
             MaterialTheme(colorScheme = darkColors) {
                 var selectedTab by remember { mutableIntStateOf(0) }
+
+                val profile by profileRepo.getUserProfile().collectAsState(initial = UserProfile())
+                // Dismissing the gate is per-launch on purpose: the screening is asked again next
+                // time rather than silently forgotten, but it never locks the user out of the app.
+                var screeningDismissed by remember { mutableStateOf(false) }
+                var reopenScreening by remember { mutableStateOf(false) }
+
+                val showScreening = reopenScreening ||
+                    (!profile.screening.isComplete && !screeningDismissed)
+
+                if (showScreening) {
+                    ScreeningScreen(
+                        viewModel = screeningVm,
+                        onFinished = { reopenScreening = false },
+                        onSkip = {
+                            screeningDismissed = true
+                            reopenScreening = false
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    return@MaterialTheme
+                }
 
                 Scaffold(
                     bottomBar = {
@@ -104,7 +128,8 @@ class MainActivity : ComponentActivity() {
                             viewModel = tonightVm,
                             audioEngine = audioEngine,
                             transportGateway = transportGateway,
-                            modifier = Modifier.padding(innerPadding)
+                            modifier = Modifier.padding(innerPadding),
+                            onOpenScreening = { reopenScreening = true }
                         )
                         1 -> DreamJournalScreen(
                             viewModel = journalVm,
