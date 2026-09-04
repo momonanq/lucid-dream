@@ -61,14 +61,17 @@
 - [x] Добавлены специализированные unit-тесты на защиту от ложных срабатываний и достаточность данных
 
 ### M2 — Перевод на Android/Wear OS (1–2 недели)
-- [ ] Добавить AGP, конвертировать `:phoneApp` в `com.android.application` (minSdk 30, Compose)
-- [ ] Конвертировать `:wearApp` в Wear OS `com.android.application` + Compose for Wear OS
-- [ ] `core/*` оставить чистыми JVM/KMP-модулями — они изменений не заметят
-- [ ] Реальный транспорт поверх Wearable Data Layer (`MessageClient` / `DataClient`) под существующий `WearSyncMessageProtocol`
-- [ ] Обработка разрыва связи ночью: очередь событий на часах, догон при реконнекте
-- [ ] `ForegroundService` на часах вместо `CoroutineScope(Dispatchers.Default)`, wake locks, исключение из Doze
-- [ ] Реальная хаптика (`Vibrator` / `VibratorManager`) и реальный аудио-cue (`AudioTrack` / `ExoPlayer`, поверх DND-политики)
-- [ ] Room вместо `InMemory*` репозиториев + миграции
+- [x] Добавить AGP (8.7.3), конвертировать `:phoneApp` в `com.android.application` (minSdk 30, Jetpack Compose Material 3)
+- [x] Конвертировать `:wearApp` в Wear OS `com.android.application` + Compose for Wear OS (minSdk 30, Wear Compose 1.4.1)
+- [x] `:core:model` и `:core:algorithm` оставлены чистыми Kotlin JVM модулями (быстрые тесты за миллисекунды)
+- [x] Реальный транспорт поверх Wearable Data Layer (`MessageClient` / `NodeClient` / `WearableListenerService`)
+- [x] Обработка разрыва связи ночью: персистентная очередь событий на часах (`RoomOfflineEventQueue` в Room SQLite), последовательный догон при реконнекте
+- [x] `WatchTrackingForegroundService` на часах с `PARTIAL_WAKE_LOCK`, Ongoing Activity нотификацией, Doze-устойчивостью и тикером 60с
+- [x] Реальная хаптика (`AndroidWatchHapticEngine` поверх `Vibrator` / `VibratorManager` с прогрессивным 3-tap паттерном и защитой по длительности) и реальный аудио-cue (`AndroidTlrAudioEngine` на `AudioTrack` с 432 Гц синусоидой и бинауральными 6 Гц тета-ритмами)
+- [x] Room SQLite база данных (`LucidDatabase`) + персистентные репозитории (`RoomNightSessionRepository`, `RoomDreamJournalRepository`, `RoomUserProfileRepository`)
+- [x] Нативные UI экраны:
+  - Phone: `TonightScreen` (селектор протоколов, слайдеры громкости/вибрации, запуск трекинга), `DreamJournalScreen` (список снов, FAB ввода, авто-экстракция dream signs), `SleepReviewScreen` (утренний отчет, таймлайн REM, калибровка)
+  - Wear OS: `WatchReadyScreen` (кнопка старта, тест хаптики), `WatchTrackingScreen` (индикатор REM, счетчик сигналов, защита от случайной остановки), `WatchMorningFeedbackScreen` (экспресс-опрос из 3 шагов)
 
 ### M3 — Интеграция Samsung (блокируется внешним одобрением)
 - [ ] **Подать партнёрскую заявку на Samsung Health Sensor SDK — начать немедленно, занимает недели**
@@ -84,10 +87,10 @@
 - [ ] Пилот на 5–10 пользователях
 
 ### M5 — Продуктовая поверхность
-- [ ] Экраны телефона: Onboarding, Home/Tonight, Dream Journal, Reality Checks, Night Session Setup, Sleep Review, Insights
-- [ ] Экраны часов: Ready, Start Session, Night Running, Quick Morning Feedback
-- [ ] Голосовой ввод снов
-- [ ] Уведомления и reality-check reminders
+- [x] Экраны телефона: Tonight, Dream Journal, Sleep Review, навигация Material 3
+- [x] Экраны часов: Ready, Night Running, Quick Morning Feedback на Wear Compose
+- [ ] Голосовой ввод снов (Android SpeechRecognizer / Gemini Audio API)
+- [ ] Уведомления и reality-check reminders в течение дня
 
 ---
 

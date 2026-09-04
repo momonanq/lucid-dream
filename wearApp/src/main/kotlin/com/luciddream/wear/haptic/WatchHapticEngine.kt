@@ -6,7 +6,7 @@ import kotlinx.coroutines.delay
 /**
  * Watch Haptic engine providing progressive, soft tactile cue patterns on Galaxy Watch.
  */
-class WatchHapticEngine {
+open class WatchHapticEngine {
 
     data class HapticPattern(
         val pulseCount: Int,
@@ -22,7 +22,7 @@ class WatchHapticEngine {
     /**
      * Triggers a non-intrusive haptic cue tailored for REM lucidity induction without awakening.
      */
-    suspend fun playLucidCue(intensity: Double = 0.5) {
+    open suspend fun playLucidCue(intensity: Double = 0.5) {
         val clampedIntensity = intensity.coerceIn(0.1, 1.0)
 
         // Progressive 3-tap pattern: 70ms tap -> 150ms pause -> 70ms tap -> 150ms pause -> 90ms tap
@@ -47,7 +47,7 @@ class WatchHapticEngine {
     /**
      * Quick haptic confirmation when testing vibration from the watch screen.
      */
-    suspend fun playTestTap() {
+    open suspend fun playTestTap() {
         playLucidCue(0.4)
     }
 }

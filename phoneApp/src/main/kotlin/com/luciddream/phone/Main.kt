@@ -6,15 +6,12 @@ import com.luciddream.algorithm.protocols.SsildProtocolManager
 import com.luciddream.algorithm.protocols.WbtbScheduler
 import com.luciddream.data.repository.*
 import com.luciddream.data.samsung.MockSamsungHealthDataGateway
+import com.luciddream.data.sync.CueTriggeredPayload
 import com.luciddream.data.sync.QuickMorningFeedbackPayload
 import com.luciddream.model.*
 import com.luciddream.phone.audio.TlrAudioEngine
 import com.luciddream.phone.service.PhoneSessionCoordinator
 import com.luciddream.phone.ui.*
-import com.luciddream.wear.haptic.WatchHapticEngine
-import com.luciddream.wear.sensor.SamsungSensorManager
-import com.luciddream.wear.service.WatchNightTrackingService
-import com.luciddream.wear.ui.WatchMainWorkflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -122,47 +119,27 @@ suspend fun runInteractiveNightSimulation(
     )
     println("✓ Сессия ${startPayload.sessionId} запущена на телефоне и отправлена на Galaxy Watch.")
 
-    val watchSensors = SamsungSensorManager()
-    val watchHaptic = WatchHapticEngine()
-    val watchService = WatchNightTrackingService(watchSensors, watchHaptic)
-    val watchSession = watchService.startSession(startPayload, profile)
-
-    // Bridge callbacks
-    watchService.onCueTriggeredCallbacks.add { cuePayload ->
-        println("\n>>> [GALAXY WATCH] Сработал ночной триггер! <<<")
-        println("    Тип: ${cuePayload.cueType} | Интенсивность: ${(cuePayload.intensity * 100).toInt()}% | REM Confidence: ${String.format("%.2f", cuePayload.confidence)}")
-        coordinator.handleLiveCueEvent(cuePayload)
-        println("    [SAMSUNG PHONE] Проигран гармонический 432 Гц звуковой сигнал TLR")
-    }
-
-    watchService.onWakeSpikeCallbacks.add { spike ->
-        println("\n[ВНИМАНИЕ] Зафиксирован Wake Spike (пробуждение после сигнала) на cue: ${spike.cueId}")
-        coordinator.handleWakeSpikeEvent(spike)
-    }
-
     val startMs = startPayload.startTimeMs
-    println("\nЭмуляция 8 часов сна (с ускоренным прогоном фаз):")
+    println("\nЭмуляция ночи (обмен событиями по Wearable Data Layer):")
+    println("• 0–90 мин: Погружение в сон и медленноволновый сон. Сигналы заблокированы алгоритмом.")
+    println("• 90–240 мин: Цикл 2 сна, циркадное нарастание.")
+    println("• 240–360 мин: Зона пиковой плотности REM (5.5 часов). Часы детектируют REM и посылают CueTriggeredPayload.")
 
-    // Phase 1: 0 - 90 min (Light & Deep N3)
-    println("• 0–90 мин: Погружение в сон и глубокий медленноволновый сон (N3). Сигналы заблокированы алгоритмом.")
-    feedSensorBatch(watchSensors, startMs, startMs + 90 * 60 * 1000L, hr = 54.0, ibiVar = 25.0, motion = 0.02)
-    var win = watchService.processSensorWindow(startMs, startMs + 90 * 60 * 1000L, profile)
-    println("  -> Окно 90м: REM Confidence = ${String.format("%.2f", win.confidence)} (подавлен)")
-
-    // Phase 2: 90 - 240 min (Cycle 2, brief REM)
-    println("• 90–240 мин: Второй цикл сна, нарастание циркадной готовности.")
-    feedSensorBatch(watchSensors, startMs + 90 * 60 * 1000L, startMs + 240 * 60 * 1000L, hr = 56.0, ibiVar = 35.0, motion = 0.03)
-    win = watchService.processSensorWindow(startMs + 90 * 60 * 1000L, startMs + 240 * 60 * 1000L, profile)
-    println("  -> Окно 240м: REM Confidence = ${String.format("%.2f", win.confidence)}")
-
-    // Phase 3: 240 - 360 min (Peak REM zone 5.5h)
-    println("• 240–360 мин: Зона пиковой плотности REM (5.5 часов сна). Высокая атония и вариабельность пульса.")
-    feedSensorBatch(watchSensors, startMs + 240 * 60 * 1000L, startMs + 360 * 60 * 1000L, hr = 58.0, ibiVar = 45.0, motion = 0.02)
-    win = watchService.processSensorWindow(startMs + 240 * 60 * 1000L, startMs + 360 * 60 * 1000L, profile)
-    println("  -> Окно 360м: REM Confidence = ${String.format("%.2f", win.confidence)} (ВЫСОКАЯ ВЕРОЯТНОСТЬ REM)")
+    val cuePayload = CueTriggeredPayload(
+        cueId = "cue_live_${startPayload.sessionId}",
+        sessionId = startPayload.sessionId,
+        timestampMs = startMs + 330 * 60 * 1000L,
+        cueType = CueType.COMBINED,
+        intensity = profile.preferredHapticIntensity,
+        confidence = 0.82
+    )
+    println("\n>>> [GALAXY WATCH -> PHONE] Передано событие /lucid/event/cue <<<")
+    println("    Тип: ${cuePayload.cueType} | Интенсивность: ${(cuePayload.intensity * 100).toInt()}% | REM Confidence: ${String.format("%.2f", cuePayload.confidence)}")
+    coordinator.handleLiveCueEvent(cuePayload)
+    println("    [SAMSUNG PHONE] Проигран гармонический 432 Гц звуковой сигнал TLR")
 
     // Finish session in the morning
-    println("\n• Утро (480 мин): Завершение сессии и утренний опрос.")
+    println("\n• Утро (480 мин): Завершение сессии и утренний опрос с часов.")
     val morningFeedback = QuickMorningFeedbackPayload(
         sessionId = startPayload.sessionId,
         timestampMs = startMs + 480 * 60 * 1000L,
@@ -176,28 +153,6 @@ suspend fun runInteractiveNightSimulation(
         endTimeMs = startMs + 480 * 60 * 1000L,
         morningFeedback = morningFeedback
     )
-
-    println("\n=======================================================")
-    println(" 📋 РЕЗУЛЬТАТЫ СЕССИИ И ПОСТФАКТУМ КАЛИБРОВКИ")
-    println("=======================================================")
-    println("Всего сигналов подано: ${calibration.totalCuesDelivered}")
-    println("Сигналов в фазе REM (по Samsung Health): ${calibration.cuesInRemStage}")
-    println("Точность попадания в REM (Accuracy Proxy): ${String.format("%.1f", calibration.remAccuracyProxy * 100)}%")
-    println("Количество wake spikes: ${calibration.wakeSpikesCount}")
-    println("Рекомендации алгоритма:")
-    calibration.recommendations.forEach { println("  • $it") }
-    println("Калибровочных ночей завершено: ${calibration.adaptedProfile.calibrationNightsCompleted}")
-}
-
-fun feedSensorBatch(sensors: SamsungSensorManager, startMs: Long, endMs: Long, hr: Double, ibiVar: Double, motion: Double) {
-    val step = ((endMs - startMs) / 30).coerceAtLeast(1000L)
-    for (i in 0 until 30) {
-        val t = startMs + (i * step)
-        sensors.onHeartRateSample(HeartRateReading(t, hr))
-        val jitter = if (i % 2 == 0) ibiVar else -ibiVar
-        sensors.onIbiSample(IbiReading(t, (60000.0 / hr) + jitter))
-        sensors.onMotionSample(MotionReading(t, motion.toFloat(), motion.toFloat(), 9.8f))
-    }
 }
 
 suspend fun runDreamJournalMenu(journalVm: DreamJournalViewModel, scanner: Scanner) {

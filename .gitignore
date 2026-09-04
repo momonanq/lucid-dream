@@ -1,6 +1,7 @@
 # Environment & Secrets
 .env
 .env.local
+local.properties
 
 # Gradle & Kotlin build directories
 .gradle/
