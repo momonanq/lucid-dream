@@ -10,7 +10,13 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.luciddream.phone"
+        // Must be identical to the wearApp applicationId. Google Play services delivers Data Layer
+        // traffic only between apps whose package name AND signature match across the two devices,
+        // so a differing id silently breaks MessageClient, CapabilityClient and the offline queue:
+        // the phone and the watch never see each other.
+        // https://developer.android.com/training/wearables/data/overview#security
+        // The namespace above stays distinct — it only names generated classes.
+        applicationId = "com.luciddream"
         minSdk = 30
         targetSdk = 35
         versionCode = 1

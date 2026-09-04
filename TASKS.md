@@ -14,11 +14,10 @@
 **Главный разрыв больше не архитектурный.** Проект переведён на Android/Wear OS (M2), транспорт,
 персистентность, хаптика и аудио реальные. Осталось два блокера, и оба про данные, а не про код:
 
-1. **Нет доступа к настоящим IBI/PPG.** `SamsungSensorDataSourceStub` — заглушка поверх стандартного
-   Wear OS HR-датчика, который межпульсовых интервалов не отдаёт. Без них `hrv_score` исключается из
-   скоринга (веса перенормируются), то есть на любых часах без Samsung SDK алгоритм работает
-   в ослабленном режиме. Разблокируется developer mode — заявка для этого не нужна.
-2. **Алгоритм не валидирован.** Ни одной ночи на реальном PPG не собрано.
+1. **Алгоритм не валидирован.** Ни одной ночи на реальном PPG не собрано. Интеграция с Samsung
+   Health Sensor SDK написана (`src/samsung/kotlin`), но на живом устройстве не проверялась.
+2. **На часах без Samsung SDK** IBI недоступны в принципе, поэтому `hrv_score` исключается из
+   скоринга с перенормировкой весов — алгоритм работает, но в ослабленном режиме.
 
 ## ✅ Что действительно готово
 
@@ -36,7 +35,7 @@
 
 ## ❌ Что НЕ готово (следующие шаги)
 
-- [ ] **Samsung Health Sensor SDK**: реальный трекер вместо `SamsungSensorDataSourceStub` — единственный источник настоящих IBI/PPG
+- [x] **Samsung Health Sensor SDK**: `SamsungHealthSensorDataSource` поверх `HealthTrackingService` — **не проверен на железе**
 - [ ] **Валидация алгоритма на реальных данных PPG/IBI** — не сделана, см. M4
 - [ ] Партнёрская заявка Samsung — нужна для распространения, не для разработки
 - [ ] Samsung Health Data SDK: реальный импорт стадий сна вместо `MockSamsungHealthDataGateway`
@@ -79,7 +78,7 @@
 ### M3 — Интеграция Samsung Health & Энергоэффективность
 - [x] **Подготовлен гайд и шаблоны формуляров для подачи партнерской заявки на Samsung Health Sensor SDK** (`docs/SAMSUNG_HEALTH_PARTNER_GUIDE.md`)
 - [x] Реализован `HealthConnectSleepGateway` поверх Android Health Connect / Samsung Health Data с graceful degradation
-- [x] Подключены `SensorDataSource` и `SensorDataSourceFactory`: поддержка `SamsungSensorDataSourceStub` и нативного `AndroidStandardSensorDataSource` (`Sensor.TYPE_HEART_RATE`)
+- [x] `SensorDataSource` и `SensorDataSourceFactory`: реальный `SamsungHealthSensorDataSource` (условная сборка при наличии AAR) и `AndroidStandardSensorDataSource`
 - [x] Экраны разрешений и индикатор аппаратного статуса на часах (`WatchReadyScreen`: "Samsung IBI Active" / "Standard Wear OS HR")
 - [x] `BatteryDutyCycleManager`: адаптивный циркадный опрос (15с/2м в фазе N3, непрерывно в пиковой зоне REM 4.5–8ч, Low Battery Guard <20%) для гарантии сохранения заряда за 8 часов сна
 
@@ -97,7 +96,7 @@
 Собственно валидация:
 - [ ] **Не заблокирована партнёрской заявкой.** Developer mode Health Sensor Service даёт настоящие IBI и PPG без одобрения Samsung — см. [SAMSUNG_HEALTH_PARTNER_GUIDE.md](docs/SAMSUNG_HEALTH_PARTNER_GUIDE.md), раздел 2
 - [x] Исправить баг #10 — фабрикация IBI убрана, HRV исключается из скоринга при недоступности
-- [ ] Подключить реальный трекер Samsung вместо `SamsungSensorDataSourceStub`
+- [ ] Проверить `SamsungHealthSensorDataSource` на Galaxy Watch с developer mode
 - [ ] Собрать ночи в пассивном режиме на своих часах
 - [ ] Посчитать реальный hit-rate против стадий Samsung Health
 - [ ] Перекалибровать веса и только потом заявлять точность
@@ -127,6 +126,9 @@
 | 8 | `core/algorithm/.../NightCueDecisionEngine.kt` | Литерал `0.65` служил sentinel-значением («порог не переопределяли»): сравнение `Double` на неравенство, явно переданный `0.65` молча игнорировался в пользу профиля, семантика ломалась при смене дефолта. Заменено на `confidenceThresholdOverride: Double? = null` + `?: userProfile.confidenceThreshold`, добавлены 2 регрессионных теста | ✅ Исправлен |
 | 9 | `phoneApp/.../phone/Main.kt` | 338 строк мёртвого кода: консольный `fun main()` из JVM-прототипа остался в Android-модуле, где никогда не вызывается | ✅ Исправлен (файл удалён) |
 | 10 | `wearApp/.../sensor/SensorDataSource.kt` | **`AndroidStandardSensorDataSource` синтезирует `IbiReading`** из обычного HR-датчика: либо интервал между колбэками (артефакт частоты опроса), либо `60000/bpm` (детерминированная функция от BPM). Из этих чисел считается RMSSD/SDNN, то есть `hrv_score` — 20% веса — берётся из шума. Хуже: фабрикация обходит гардрейл достаточности данных (`ibis.size >= 5`), который вводился ровно затем, чтобы отсутствие IBI блокировало сигнал | ✅ Исправлен |
+| 14 | `wearApp/src/samsung/.../SamsungHealthSensorDataSource.kt` | Индикатор источника показывал «Samsung IBI Active» по факту **выбора** источника, а не доставки данных. При `SDK_POLICY_ERROR` служба привязывается, трекер создаётся, но данные не идут — надпись оставалась «активно». Теперь fidelity понижается при отказе подключения и ошибке трекера и повышается обратно при реальных IBI; сервис перечитывает её через 5 с после старта и далее каждое окно | ✅ Исправлен |
+| 13 | `wearApp/.../sensor/SensorDataSource.kt` | `SensorDataSourceFactory` проверял наличие пакета `com.samsung.android.service.health.sensor`, которого на Galaxy Watch не существует — служба называется `com.samsung.android.service.health` (это же имя объявлено в `<queries>` самого AAR). Проверка всегда возвращала false, Samsung-источник не выбирался никогда. Найдено только на живом устройстве: в JVM-тестах нет `PackageManager` | ✅ Исправлен, проверено на SM-L705F |
+| 12 | `phoneApp/build.gradle.kts`, `wearApp/build.gradle.kts` | **`applicationId` у телефона и часов различались** (`com.luciddream.phone` и `com.luciddream.wear`). Google Play services доставляет Data Layer только между приложениями с совпадающими именем пакета и подписью, поэтому `MessageClient`, `CapabilityClient` и офлайн-очередь не работали бы вовсе — устройства не увидели бы друг друга. Обнаружено перед первой установкой на железо | ✅ Исправлен |
 | 11 | `wearApp/.../sensor/SensorDataSource.kt` | `SamsungSensorDataSourceStub` объявляет `fidelity = SAMSUNG_CONTINUOUS_IBI`, но делегирует всё `AndroidStandardSensorDataSource`. На Galaxy Watch `WatchReadyScreen` показывает «● Samsung IBI Active» при неподключённом SDK | ✅ Исправлен |
 
 ## ⚠️ Внешние блокеры и риски

@@ -42,11 +42,10 @@ Samsung Health Sensor SDK даёт:
 Поддерживаются **Galaxy Watch4 и новее** на Wear OS powered by Samsung. Pixel Watch, TicWatch и
 прочие Wear OS-часы этот SDK не поддерживают в принципе.
 
-> [!WARNING]
-> Текущий `AndroidStandardSensorDataSource` **синтезирует** `IbiReading` из показаний обычного
-> HR-датчика — либо как интервал между колбэками, либо как `60000 / bpm`. Это не межпульсовые
-> интервалы, а артефакт частоты опроса. Пока это не исправлено, «деградация без сбоев» означает
-> не пониженную точность, а **HRV-компонент, посчитанный из шума**. См. TASKS.md, баг #10.
+> [!NOTE]
+> Без этого SDK приложение работает, но в ослабленном режиме: `AndroidStandardSensorDataSource`
+> не отдаёт IBI вовсе (раньше он их синтезировал — баг #10), поэтому `hrv_score` исключается из
+> скоринга, а оставшиеся веса перенормируются. Движение и время ночи продолжают работать.
 
 ---
 
@@ -59,7 +58,8 @@ Samsung Health Sensor SDK даёт:
    Developer Portal бесплатна, партнёрская заявка не требуется.
 2. Подключите AAR в `wearApp/libs/` и добавьте зависимость в `wearApp/build.gradle.kts`.
 3. Включите developer mode службы Health Sensor Service на часах по инструкции Samsung.
-4. Замените `SamsungSensorDataSourceStub` на реальную реализацию поверх `HealthTrackingService`.
+4. Пересоберите `wearApp`. Сборочный скрипт сам подхватит AAR и подключит `src/samsung/kotlin`
+   с реализацией `SamsungHealthSensorDataSource`; без AAR компилируется заглушка `src/noSamsung`.
 
 **Нужны физические часы.** Из документации: «A Galaxy Watch is also needed to develop and run the
 app». Эмулятор Wear OS этот SDK не поддерживает.
@@ -101,7 +101,9 @@ SHA-256 регистрируются в системе Samsung Health.
   ```bash
   keytool -list -v -keystore lucid-release-key.jks -alias lucid_wear_alias
   ```
-- [ ] Package name часов: `com.luciddream.wear`
+- [ ] Package name часов: `com.luciddream`
+      (это `applicationId`, а не namespace — он общий у телефона и часов, иначе Wearable Data
+      Layer не соединит их; именно его регистрирует Samsung вместе с SHA-256)
 - [ ] Прочитано [лицензионное соглашение](https://developer.samsung.com/health/sensor/sdk-license-partner-service-agreement.html)
 
 Срок рассмотрения Samsung публично не декларирует — планируйте недели, а не дни, и не ставьте
@@ -164,17 +166,28 @@ Samsung добавляет package name и SHA-256 в белый список `H
 
 В проекте нужно:
 
-1. Положить официальный AAR в `wearApp/libs/` и объявить зависимость.
-2. Заменить `SamsungSensorDataSourceStub` реальной реализацией поверх `HealthTrackingService`,
-   отдающей настоящие `IbiReading`.
-3. Убедиться, что `SensorDataSourceFactory` выбирает её, а `SourceFidelity.SAMSUNG_CONTINUOUS_IBI`
-   отображается на часах только при фактическом подключении к SDK.
+1. Зарегистрировать в форме `applicationId` (`com.luciddream`) и SHA-256 релизной подписи.
+2. Подписать сборку тем же ключом и проверить, что SDK работает **без** developer mode.
 
-> [!IMPORTANT]
-> Сейчас `SamsungSensorDataSourceStub` объявляет `fidelity = SAMSUNG_CONTINUOUS_IBI`, но внутри
-> делегирует всё `AndroidStandardSensorDataSource`. На Galaxy Watch экран `WatchReadyScreen`
-> показывает «● Samsung IBI Active», хотя SDK не подключён. Это нужно исправить вместе с
-> подключением реального трекера, иначе индикатор источника данных вводит в заблуждение.
+> [!TIP]
+> Индикатор на `WatchReadyScreen` отражает фактическую доставку данных, а не выбор источника:
+> при `SDK_POLICY_ERROR` он переключается на «● Standard Wear OS HR» в течение ~5 секунд после
+> старта трекинга. Если после включения developer mode он там и остался — политика доступа всё
+> ещё режет данные; смотрите `adb logcat -s SamsungSensorSource`.
+
+### Проверено на Galaxy Watch Ultra (SM-L705F, Android 16), 2026-09-05
+
+Без developer mode и без партнёрского одобрения цепочка проходит до конца и упирается в политику:
+
+```
+HealthTrackingConnector: Tracker Service Connected with appID: com.luciddream
+HealthTrackingService: getHealthTacker of type HEART_RATE_CONTINUOUS called
+SHS#WearTrackerService: SetListener of type HEART_RATE and appID com.luciddream called
+E SamsungSensorSource: Heart rate tracker error: SDK_POLICY_ERROR
+```
+
+То есть привязка службы, наличие трекера в `supportedList` и установка слушателя ещё ничего не
+говорят о доступе к данным. Признак успеха — появление `onDataReceived`, а не `Connected`.
 
 ---
 

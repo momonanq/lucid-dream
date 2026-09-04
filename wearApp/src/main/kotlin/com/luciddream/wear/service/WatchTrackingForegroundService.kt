@@ -137,6 +137,13 @@ class WatchTrackingForegroundService : Service() {
         trackingJob?.cancel()
         trackingJob = serviceScope.launch {
             var lastWindowEnd = System.currentTimeMillis()
+
+            // The SDK answers a policy refusal within a second of the tracker being attached.
+            // Surfacing it here rather than a full window later means the user learns the source
+            // degraded while still looking at the watch, not an hour into the night.
+            delay(5_000L)
+            _sensorFidelity.value = sensorManager.currentFidelity
+
             while (isActive) {
                 delay(60_000L) // 60s window aggregation cycle
                 val now = System.currentTimeMillis()
@@ -148,6 +155,12 @@ class WatchTrackingForegroundService : Service() {
                 val window = trackingService.processSensorWindow(lastWindowEnd, now)
                 lastWindowEnd = now
                 _activeSession.value = trackingService.currentSession.value
+
+                // Fidelity is not fixed at creation: the Samsung source downgrades itself when the
+                // SDK binds but refuses data (no partner approval or developer mode) and promotes
+                // back when real intervals arrive. Re-reading it here keeps the watch indicator
+                // showing what is actually being measured.
+                _sensorFidelity.value = sensorManager.currentFidelity
             }
         }
     }

@@ -208,7 +208,7 @@ object SensorDataSourceFactory {
         // watch UI and the scoring engine both learn that no inter-beat intervals are coming.
         val isSamsungWatch = Build.MANUFACTURER.contains("samsung", ignoreCase = true)
         val hasHealthSensorService = runCatching {
-            context.packageManager.getPackageInfo("com.samsung.android.service.health.sensor", 0) != null
+            context.packageManager.getPackageInfo(SAMSUNG_HEALTH_SERVICE_PACKAGE, 0) != null
         }.getOrDefault(false)
 
         if (isSamsungWatch && hasHealthSensorService) {
@@ -217,4 +217,15 @@ object SensorDataSourceFactory {
 
         return AndroidStandardSensorDataSource(context)
     }
+
+    /**
+     * Package hosting the Health Tracking Service on a Galaxy Watch.
+     *
+     * Verified on a Galaxy Watch Ultra (SM-L705F): the installed package is
+     * `com.samsung.android.service.health`; there is no `...health.sensor`, which an earlier guard
+     * looked for and therefore never matched. The SDK's own manifest agrees — it declares
+     * <queries> for exactly this name, which is also what makes the package visible to us at all
+     * under Android 11+ package visibility rules.
+     */
+    private const val SAMSUNG_HEALTH_SERVICE_PACKAGE = "com.samsung.android.service.health"
 }

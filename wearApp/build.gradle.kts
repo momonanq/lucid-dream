@@ -24,7 +24,8 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.luciddream.wear"
+        // Must be identical to the phoneApp applicationId — see the note there.
+        applicationId = "com.luciddream"
         minSdk = 30
         targetSdk = 34
         versionCode = 1

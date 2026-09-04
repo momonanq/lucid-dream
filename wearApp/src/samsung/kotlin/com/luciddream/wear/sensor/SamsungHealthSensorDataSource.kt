@@ -36,7 +36,20 @@ class SamsungHealthSensorDataSource(
         AndroidStandardSensorDataSource(context, provideHeartRate = false)
 ) : SensorDataSource {
 
-    override val fidelity: SourceFidelity = SourceFidelity.SAMSUNG_CONTINUOUS_IBI
+    /**
+     * Reflects what is actually being delivered, not which source was selected.
+     *
+     * Connecting to the service is not the same as being allowed to read from it: without partner
+     * approval or developer mode the tracker binds and then answers SDK_POLICY_ERROR, so an
+     * indicator fixed at SAMSUNG_CONTINUOUS_IBI would report active inter-beat intervals while
+     * none arrive. Downgrading on a definitive failure also lets the window aggregator stop
+     * demanding IBI, so the app degrades to a standard-watch score instead of withholding every
+     * cue forever with no visible reason. Valid intervals promote it back.
+     */
+    @Volatile
+    private var effectiveFidelity: SourceFidelity = SourceFidelity.SAMSUNG_CONTINUOUS_IBI
+
+    override val fidelity: SourceFidelity get() = effectiveFidelity
 
     private var trackingService: HealthTrackingService? = null
     private var heartRateTracker: HealthTracker? = null
@@ -53,10 +66,12 @@ class SamsungHealthSensorDataSource(
 
         override fun onConnectionEnded() {
             connected = false
+            effectiveFidelity = SourceFidelity.ANDROID_STANDARD_HR
         }
 
         override fun onConnectionFailed(exception: HealthTrackerException?) {
             connected = false
+            effectiveFidelity = SourceFidelity.ANDROID_STANDARD_HR
             // No fallback here on purpose. Silently degrading to the standard sensor would report
             // SAMSUNG_CONTINUOUS_IBI fidelity while delivering no IBI, which is exactly the lie
             // that made the watch claim "Samsung IBI Active" with nothing attached. With no data
@@ -74,6 +89,10 @@ class SamsungHealthSensorDataSource(
         override fun onFlushCompleted() = Unit
 
         override fun onError(error: HealthTracker.TrackerError?) {
+            // SDK_POLICY_ERROR lands here when the app is neither an approved partner nor running
+            // with Health Sensor Service developer mode on: the service binds, the tracker exists,
+            // and no data is ever delivered.
+            effectiveFidelity = SourceFidelity.ANDROID_STANDARD_HR
             Log.e(TAG, "Heart rate tracker error: $error")
         }
     }
@@ -159,6 +178,9 @@ class SamsungHealthSensorDataSource(
             val usable = status == IBI_STATUS_OK && intervalMs in PLAUSIBLE_IBI_MS
 
             if (usable) {
+                // Real intervals are the only proof the SDK is delivering; promote back after a
+                // transient error resolves.
+                effectiveFidelity = SourceFidelity.SAMSUNG_CONTINUOUS_IBI
                 cb.onIbi(IbiReading(pointTimestamp - offsetFromEnd, intervalMs.toDouble()))
             }
             offsetFromEnd += intervalMs
