@@ -19,9 +19,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
 import com.luciddream.data.sync.AndroidPhoneWearableTransportGateway
 import com.luciddream.model.NightMode
 import com.luciddream.phone.audio.AndroidTlrAudioEngine
+import com.luciddream.phone.reminder.AndroidRealityCheckScheduler
+import com.luciddream.phone.reminder.RealityCheckReceiver
 import com.luciddream.phone.service.PhoneDependencies
 import kotlinx.coroutines.launch
 
@@ -34,8 +38,10 @@ fun TonightScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
     var testFeedbackText by remember { mutableStateOf<String?>(null) }
     var audioVolume by remember { mutableFloatStateOf(0.25f) }
+    var realityCheckEnabled by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
         viewModel.loadState()
@@ -226,6 +232,63 @@ fun TonightScreen(
                 StatItem(label = "Past 7 Nights", value = "${uiState.past7NightsCount}")
                 StatItem(label = "Dream Recall", value = "${uiState.past7NightsRecallCount}")
                 StatItem(label = "Lucid Dreams", value = "${uiState.past7NightsLucidCount}")
+            }
+        }
+
+        // Daytime Reality Checks Card
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.NotificationsActive, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Text(
+                            text = "Daytime Reality Checks",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Switch(
+                        checked = realityCheckEnabled,
+                        onCheckedChange = { enabled ->
+                            realityCheckEnabled = enabled
+                            if (enabled) {
+                                AndroidRealityCheckScheduler.scheduleDailyReminders(context)
+                            } else {
+                                AndroidRealityCheckScheduler.cancelAllReminders(context)
+                            }
+                        }
+                    )
+                }
+
+                Text(
+                    text = "8 randomized mindfulness prompts during active hours (09:00–22:00) with hand & text stability drills.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedButton(
+                    onClick = {
+                        val intent = Intent(context, RealityCheckReceiver::class.java).apply {
+                            action = RealityCheckReceiver.ACTION_ALARM
+                        }
+                        context.sendBroadcast(intent)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.NotificationAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Test Notification Prompt Now")
+                }
             }
         }
 

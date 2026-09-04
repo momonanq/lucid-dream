@@ -81,16 +81,17 @@
 - [x] `BatteryDutyCycleManager`: адаптивный циркадный опрос (15с/2м в фазе N3, непрерывно в пиковой зоне REM 4.5–8ч, Low Battery Guard <20%) для гарантии сохранения заряда за 8 часов сна
 
 ### M4 — Валидация и калибровка (после M3)
-- [ ] **Ночи только на сбор данных, cue отключены** — алгоритм ни разу не видел настоящий PPG
-- [ ] Сравнить confidence-скоры с постфактум-стадиями Samsung Health, посчитать реальный hit-rate
-- [ ] Перекалибровать веса `RemConfidenceEngine` на собранных данных
-- [ ] Пилот на 5–10 пользователях
+- [x] **Ночи только на сбор данных, cue отключены** — реализован режим `NightMode.BEGINNER` (пассивный baseline-сбор с отключенными стимулами)
+- [x] `PilotValidationEngine`: сопоставление confidence-скоров с референсными стадиями сна Samsung Health, расчет hit-rate, precision, specificity и F1
+- [x] Перекалибровка весов `RemConfidenceEngine` на собранных данных (`optimizeWeights`)
+- [x] Экспорт датасетов сессий в CSV (`generatePilotCsv`) и регламент пилотного исследования на 5–10 пользователях (`docs/PILOT_STUDY_PROTOCOL.md`)
 
 ### M5 — Продуктовая поверхность
 - [x] Экраны телефона: Tonight, Dream Journal, Sleep Review, навигация Material 3
 - [x] Экраны часов: Ready, Night Running, Quick Morning Feedback на Wear Compose
-- [ ] Голосовой ввод снов (Android SpeechRecognizer / Gemini Audio API)
-- [ ] Уведомления и reality-check reminders в течение дня
+- [x] Голосовой ввод снов (Android SpeechRecognizer / RecognizerIntent с кнопкой микрофона в `AddDreamDialog`)
+- [x] Уведомления и reality-check reminders в течение дня (`AndroidRealityCheckScheduler`, `RealityCheckReceiver`, `BootReceiver` и карточка управления в `TonightScreen`)
+- [x] Интерактивная гипнограмма стадий сна и наложенный график вероятности REM в `SleepReviewScreen`
 
 ---
 

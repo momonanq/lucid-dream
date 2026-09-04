@@ -8,6 +8,10 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:allowBackup="true"
         android:icon="@android:drawable/ic_dialog_info"
@@ -31,6 +35,25 @@
                 <action android:name="com.google.android.gms.wearable.BIND_LISTENER" />
             </intent-filter>
         </service>
+
+        <receiver
+            android:name=".reminder.RealityCheckReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.luciddream.phone.ACTION_REALITY_CHECK_ALARM" />
+                <action android:name="com.luciddream.phone.ACTION_REALITY_CHECK_COMPLETED" />
+                <action android:name="com.luciddream.phone.ACTION_REALITY_CHECK_SNOOZE" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".reminder.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

@@ -21,6 +21,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.Mic
 import com.luciddream.model.DreamEntry
 import com.luciddream.model.DreamTag
 import kotlinx.coroutines.launch
@@ -208,6 +214,24 @@ fun AddDreamDialog(
     onSave: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val speechLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spokenText = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+            if (!spokenText.isNullOrBlank()) {
+                val updated = if (uiState.draftTranscript.isBlank()) {
+                    spokenText
+                } else {
+                    "${uiState.draftTranscript} $spokenText"
+                }
+                onTranscriptChange(updated)
+            }
+        }
+    }
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(24.dp),
@@ -247,6 +271,23 @@ fun AddDreamDialog(
                     value = uiState.draftTranscript,
                     onValueChange = onTranscriptChange,
                     label = { Text("Dream Narrative / Memory") },
+                    trailingIcon = {
+                        IconButton(
+                            onClick = {
+                                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Расскажите ваш сон голосом...")
+                                }
+                                speechLauncher.launch(intent)
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Mic,
+                                contentDescription = "Голосовой ввод сна",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    },
                     minLines = 4,
                     maxLines = 8,
                     modifier = Modifier.fillMaxWidth()

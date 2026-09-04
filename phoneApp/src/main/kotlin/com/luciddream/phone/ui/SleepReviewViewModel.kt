@@ -1,6 +1,7 @@
 package com.luciddream.phone.ui
 
 import com.luciddream.algorithm.CalibrationEngine
+import com.luciddream.algorithm.PilotValidationEngine
 import com.luciddream.data.repository.NightSessionRepository
 import com.luciddream.data.repository.UserProfileRepository
 import com.luciddream.data.samsung.SamsungHealthDataGateway
@@ -17,6 +18,8 @@ data class SleepReviewUiState(
     val sleepImport: SleepImport? = null,
     val morningReport: MorningReport? = null,
     val calibrationResult: CalibrationEngine.CalibrationResult? = null,
+    val validationMetrics: PilotValidationEngine.ValidationMetrics? = null,
+    val pilotCsvData: String? = null,
     val isLoading: Boolean = false
 )
 
@@ -24,7 +27,8 @@ class SleepReviewViewModel(
     private val sessionRepository: NightSessionRepository,
     private val profileRepository: UserProfileRepository,
     private val samsungHealthGateway: SamsungHealthDataGateway,
-    private val calibrationEngine: CalibrationEngine = CalibrationEngine()
+    private val calibrationEngine: CalibrationEngine = CalibrationEngine(),
+    private val validationEngine: PilotValidationEngine = PilotValidationEngine()
 ) {
 
     private val _uiState = MutableStateFlow(SleepReviewUiState())
@@ -55,11 +59,21 @@ class SleepReviewViewModel(
             )
         } else null
 
+        val (validationMetrics, _) = if (session != null) {
+            validationEngine.evaluateSession(session, sleepImport, profile.confidenceThreshold)
+        } else (null to emptyList())
+
+        val pilotCsv = if (session != null) {
+            validationEngine.generatePilotCsv(session, sleepImport, profile.confidenceThreshold)
+        } else null
+
         _uiState.value = SleepReviewUiState(
             session = session,
             sleepImport = sleepImport,
             morningReport = report,
             calibrationResult = calibrationResult,
+            validationMetrics = validationMetrics,
+            pilotCsvData = pilotCsv,
             isLoading = false
         )
     }
