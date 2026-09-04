@@ -1,77 +1,178 @@
-# Гайд по подаче партнерской заявки на Samsung Health Sensor SDK
+# Доступ к Samsung Health Sensor SDK
 
-Данный документ содержит пошаговую инструкцию и шаблоны формуляров для получения официального партнерского доступа (**Samsung Partner Privilege**) к **Samsung Health Sensor SDK** на Galaxy Watch (Wear OS 4 / 5).
+Документ описывает два разных пути к сенсорам Galaxy Watch — **developer mode** (доступен сразу,
+для разработки и валидации) и **Samsung Partner Program** (нужен для распространения) — и содержит
+готовые формулировки для заявки.
+
+> Проверено 2026-09-04 по официальной документации Samsung. Ссылки и требования меняются —
+> сверяйтесь с первоисточником перед подачей.
 
 ---
 
-## 1. Зачем требуется партнерская заявка?
+## 0. Короткий ответ
 
-По умолчанию на Wear OS стандартный Android `SensorManager` (`Sensor.TYPE_HEART_RATE`) отдаёт усредненный пульс (BPM) с задержкой в несколько секунд. 
+|  | Developer mode | Partner Program |
+|---|---|---|
+| Что даёт | Полный доступ к IBI и PPG на **вашем** устройстве | То же самое для **всех** пользователей |
+| Нужен для | Разработки, отладки, **сбора данных для валидации** | Публикации в Google Play / Galaxy Store |
+| Как получить | Включается на часах, заявка не нужна | Заявка и одобрение Samsung |
+| Ограничение | Работает только при включённом режиме разработчика; не для пользователей | — |
 
-Для предиктивного определения фазы быстрого сна (REM-сна) нашему алгоритму требуется:
-1. **Непрерывный поток сырых межпульсовых интервалов (IBI — Inter-Beat Interval)** с миллисекундной точностью для вычисления вариабельности ритма сердца (RMSSD, SDNN).
-2. **Высокочастотный фотоплетизмографический датчик (PPG)** (`TrackerType.HEART_RATE_CONTINUOUS`).
+**Валидация алгоритма не заблокирована партнёрской заявкой.** Developer mode даёт настоящие IBI
+и PPG уже сегодня — этого достаточно, чтобы собрать ночи на своих часах, сравнить confidence-скоры
+со стадиями из Samsung Health и перекалибровать веса. Заявка нужна, чтобы **раздавать** приложение,
+а не чтобы его проверить.
 
-Samsung ограничивает этот доступ через системную службу `com.samsung.android.service.health.sensor`. Доступ активируется только для приложений с одобренным цифровым сертификатом подписи (SHA-256 fingerprint).
+---
+
+## 1. Зачем вообще нужен Samsung SDK
+
+Стандартный Android `SensorManager` на Wear OS (`Sensor.TYPE_HEART_RATE`) отдаёт усреднённый
+пульс в BPM. Он **не даёт межпульсовых интервалов**, а без них нельзя посчитать ни RMSSD, ни SDNN,
+то есть компонент `hrv_score` (20% веса в `RemConfidenceEngine`) остаётся без входных данных.
+
+Samsung Health Sensor SDK даёт:
+
+1. **Непрерывный поток IBI (Inter-Beat Interval)** с миллисекундной точностью;
+2. **Высокочастотный PPG** через `TrackerType.HEART_RATE_CONTINUOUS`.
+
+Доступ ограничен системной службой `com.samsung.android.service.health.sensor` и активируется
+для приложений с одобренной подписью (SHA-256) — либо, в developer mode, без подписи вовсе.
+
+Поддерживаются **Galaxy Watch4 и новее** на Wear OS powered by Samsung. Pixel Watch, TicWatch и
+прочие Wear OS-часы этот SDK не поддерживают в принципе.
+
+> [!WARNING]
+> Текущий `AndroidStandardSensorDataSource` **синтезирует** `IbiReading` из показаний обычного
+> HR-датчика — либо как интервал между колбэками, либо как `60000 / bpm`. Это не межпульсовые
+> интервалы, а артефакт частоты опроса. Пока это не исправлено, «деградация без сбоев» означает
+> не пониженную точность, а **HRV-компонент, посчитанный из шума**. См. TASKS.md, баг #10.
+
+---
+
+## 2. Путь 1 — Developer mode (доступен сразу)
+
+Официальная инструкция: <https://developer.samsung.com/health/sensor/guide/developer-mode.html>
+
+1. Скачайте SDK со страницы <https://developer.samsung.com/health/sensor> (регистрация в
+   Samsung Developer Portal бесплатна, заявка не требуется).
+2. Подключите AAR в `wearApp/libs/` и добавьте зависимость в `wearApp/build.gradle.kts`.
+3. Включите developer mode службы Health Platform на часах по инструкции выше.
+4. Замените `SamsungSensorDataSourceStub` на реальную реализацию поверх `HealthTrackingService`.
+
+Ограничение прямо из документации: режим предназначен **только для тестирования и отладки**,
+приложение работает лишь пока режим включён, и это не путь для конечных пользователей.
+
+Для сбора пилотных данных по [PILOT_STUDY_PROTOCOL.md](PILOT_STUDY_PROTOCOL.md) этого достаточно,
+если участники — вы и коллеги с собственными часами.
+
+---
+
+## 3. Путь 2 — Partner Program (нужен для распространения)
+
+**Форма заявки:**
+<https://developer.samsung.com/SHealth/business-partner/m48wzh9rwz606k0h>
+
+Подавать нужно **до** начала распространения приложения. После одобрения package name и
+SHA-256 регистрируются в системе Samsung Health.
 
 > [!NOTE]
-> В приложении уже реализована **Graceful Degradation**: до момента одобрения заявки часы работают на стандартном Android `SensorManager` (`AndroidStandardSensorDataSource`) без сбоев.
+> На форуме разработчиков Samsung встречалось сообщение о том, что приём заявок в Partner Apps
+> Program временно приостановлен на время обновления программы, а желающим предлагалось оставить
+> email через support request, чтобы получить уведомление о возобновлении. Дату этого сообщения
+> подтвердить не удалось — страница форума не читается без JavaScript. **Проверьте статус на самой
+> форме перед подачей**; если приём закрыт, оставьте заявку через support и работайте в developer
+> mode.
 
----
+### Чек-лист перед подачей
 
-## 2. Чек-лист перед подачей заявки
-
-- [ ] Создан аккаунт разработчика на [Samsung Developer Portal](https://developer.samsung.com/).
-- [ ] Сгенерирован Keystore релизной подписи приложения (`lucid-release-key.jks`).
-- [ ] Получен отпечаток SHA-256 ключа подписи:
+- [ ] Аккаунт на [Samsung Developer Portal](https://developer.samsung.com/)
+- [ ] Релизный keystore приложения часов (в проекте его пока нет — нужно создать)
+- [ ] Отпечаток SHA-256:
   ```bash
   keytool -list -v -keystore lucid-release-key.jks -alias lucid_wear_alias
   ```
-- [ ] Зафиксирован Package Name приложения часов:
-  `com.luciddream.wear`
+- [ ] Package name часов: `com.luciddream.wear`
+- [ ] Прочитано [лицензионное соглашение](https://developer.samsung.com/health/sensor/sdk-license-partner-service-agreement.html)
+
+Срок рассмотрения Samsung публично не декларирует — планируйте недели, а не дни, и не ставьте
+релиз в зависимость от конкретной даты.
 
 ---
 
-## 3. Пошаговый процесс подачи в Samsung Developer Portal
-
-1. Перейдите в раздел **Samsung Health SDK** $\rightarrow$ **Partnership Request**.
-2. Выберите тип SDK: **Samsung Health Sensor SDK for Wear OS**.
-3. Заполните форму заявки на английском языке (шаблоны ниже).
-4. Укажите Package Name: `com.luciddream.wear`.
-5. Вставьте отпечаток SHA-256 вашего сертификата.
-6. Отправьте форму на модерацию (срок рассмотрения обычно составляет от 7 до 21 рабочего дня).
-
----
-
-## 4. Шаблоны ответов для модерации Samsung
+## 4. Формулировки для заявки
 
 ### App Name & Overview
 - **Application Name**: Lucid Dream Companion
 - **Category**: Health & Fitness / Sleep Science & Circadian Wellness
-- **Target Devices**: Samsung Galaxy Watch 4, Galaxy Watch 5, Galaxy Watch 6, Galaxy Watch 7 (Wear OS)
+- **Target Devices**: Galaxy Watch 4 и новее (Wear OS powered by Samsung)
 
-### Detailed Purpose of Use (Обоснование запроса)
-> "Our application provides nocturnal circadian rhythm monitoring and non-invasive REM sleep state tracking to help users cultivate lucid dreaming through cognitive protocols (TLR, MILD, WBTB). To accurately detect physiological signs of REM sleep (parasympathetic atonia coupled with phasic heart-rate variability), we require raw millisecond-accurate Inter-Beat Intervals (IBI) from `TrackerType.HEART_RATE_CONTINUOUS` and synchronous 3-axis accelerometer data. Standard Android heart rate metrics provide only low-frequency averages that are inadequate for time-domain heart-rate variability (HRV / RMSSD) analysis."
+### Detailed Purpose of Use
 
-### Requested Privileges (Запрашиваемые привилегии)
-- `com.samsung.health.sensor.heart_rate_continuous` (Continuous photoplethysmography and inter-beat intervals)
-- `com.samsung.health.sensor.accelerometer` (High-resolution motor quiescence and sleep atonia tracking)
+> Our application provides nocturnal circadian rhythm monitoring and probabilistic REM-like state
+> estimation to help users practise lucid dreaming through cognitive protocols (TLR, MILD, WBTB).
+> To estimate the physiological signature of REM sleep — motor quiescence combined with phasic
+> autonomic variability — we require millisecond-accurate Inter-Beat Intervals from
+> `TrackerType.HEART_RATE_CONTINUOUS` together with synchronous 3-axis accelerometer data.
+> Standard Android heart rate metrics provide only low-frequency averages, which cannot support
+> time-domain heart rate variability analysis (RMSSD, SDNN).
+>
+> The application does not claim clinical sleep staging. Published evaluations of Galaxy Watch
+> sleep staging report moderate agreement with polysomnography, so our confidence score is used
+> as an operational threshold for delivering a gentle cue, never as a medical determination of
+> sleep stage, and this is stated to users in the product itself.
 
-### Data Privacy & Storage (Безопасность и хранение данных)
-> "All raw biometric sensor readings (HR, IBI, Accelerometer) are processed entirely on-device in real-time. No raw PPG waveforms or biometric time-series are uploaded to any external server or cloud database. Sensor data is aggregated locally in ephemeral memory buffers into 60-second windows and stored exclusively in a secure local Room SQLite database on the user's paired device. The application is completely non-diagnostic and wellness-focused."
+### Requested Privileges
+- `com.samsung.health.sensor.heart_rate_continuous` — continuous PPG and inter-beat intervals
+- `com.samsung.health.sensor.accelerometer` — motor quiescence during sleep
 
-### Medical Disclaimer Confirmation (Медицинский дисклеймер)
-> "The application includes clear disclaimers that it is not intended for medical diagnosis, treatment, or prevention of sleep disorders (e.g. sleep apnea, narcolepsy, insomnia). It is purely an exploratory tool for cognitive awareness and circadian sleep optimization."
+### Data Privacy & Storage
+
+> All raw biometric readings (HR, IBI, accelerometer) are processed entirely on-device in real
+> time. No raw PPG waveforms or biometric time series are uploaded to any external server. Sensor
+> samples are aggregated locally into 60-second windows and stored only in a local Room SQLite
+> database on the user's own devices. There is no cloud sync, no analytics SDK, and no third-party
+> data sharing.
+
+### Safety & Medical Disclaimer
+
+> The application is consumer wellness software and states plainly that it is not a medical device,
+> does not diagnose sleep stages clinically, and does not treat sleep disorders.
+>
+> Because the product delivers sensory stimuli during sleep, it enforces explicit safety limits in
+> code rather than in policy text: an onboarding screening withholds all nocturnal cues from users
+> under 18 or reporting sleep apnea, chronic insomnia, parasomnia, narcolepsy, seizure disorders or
+> treatment for a psychotic disorder; exposure is capped at three cue nights per rolling week with a
+> mandatory rest night between them; and cueing stops automatically after two consecutive nights in
+> which cues woke the user, or when self-reported sleep quality declines. When any limit trips, the
+> night runs without cues rather than the app blocking access.
 
 ---
 
-## 5. Что делать после получения одобрения?
+## 5. После одобрения
 
-После одобрения заявки Samsung активирует ваш Package Name и SHA-256 в белом списке службы `HealthTrackingService`.
-В проекте достаточно переключить фабрику в `SensorDataSourceFactory`:
-```kotlin
-// wearApp/src/main/kotlin/com/luciddream/wear/sensor/SensorDataSource.kt
-val dataSource = SamsungSensorDataSourceStub(context)
-```
-и подключить официальный AAR/JAR `samsung-health-sensor-sdk.aar` в `wearApp/libs/`.
-Часы автоматически начнут поставлять аппаратно ускоренный поток с субмиллисекундным IBI!
+Samsung добавляет package name и SHA-256 в белый список `HealthTrackingService`.
+
+В проекте нужно:
+
+1. Положить официальный AAR в `wearApp/libs/` и объявить зависимость.
+2. Заменить `SamsungSensorDataSourceStub` реальной реализацией поверх `HealthTrackingService`,
+   отдающей настоящие `IbiReading`.
+3. Убедиться, что `SensorDataSourceFactory` выбирает её, а `SourceFidelity.SAMSUNG_CONTINUOUS_IBI`
+   отображается на часах только при фактическом подключении к SDK.
+
+> [!IMPORTANT]
+> Сейчас `SamsungSensorDataSourceStub` объявляет `fidelity = SAMSUNG_CONTINUOUS_IBI`, но внутри
+> делегирует всё `AndroidStandardSensorDataSource`. На Galaxy Watch экран `WatchReadyScreen`
+> показывает «● Samsung IBI Active», хотя SDK не подключён. Это нужно исправить вместе с
+> подключением реального трекера, иначе индикатор источника данных вводит в заблуждение.
+
+---
+
+## Источники
+
+- [Samsung Health Sensor SDK](https://developer.samsung.com/health/sensor)
+- [App creation process](https://developer.samsung.com/health/sensor/process.html)
+- [Developer mode of Health Sensor Service](https://developer.samsung.com/health/sensor/guide/developer-mode.html)
+- [Partner service & SDK license agreement](https://developer.samsung.com/health/sensor/sdk-license-partner-service-agreement.html)
+- [FAQ](https://developer.samsung.com/health/sensor/faq.html)

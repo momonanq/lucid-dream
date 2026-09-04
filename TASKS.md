@@ -81,11 +81,25 @@
 - [x] Экраны разрешений и индикатор аппаратного статуса на часах (`WatchReadyScreen`: "Samsung IBI Active" / "Standard Wear OS HR")
 - [x] `BatteryDutyCycleManager`: адаптивный циркадный опрос (15с/2м в фазе N3, непрерывно в пиковой зоне REM 4.5–8ч, Low Battery Guard <20%) для гарантии сохранения заряда за 8 часов сна
 
-### M4 — Валидация и калибровка (после M3)
-- [x] **Ночи только на сбор данных, cue отключены** — реализован режим `NightMode.BEGINNER` (пассивный baseline-сбор с отключенными стимулами)
-- [x] `PilotValidationEngine`: сопоставление confidence-скоров с референсными стадиями сна Samsung Health, расчет hit-rate, precision, specificity и F1
-- [x] Перекалибровка весов `RemConfidenceEngine` на собранных данных (`optimizeWeights`)
-- [x] Экспорт датасетов сессий в CSV (`generatePilotCsv`) и регламент пилотного исследования на 5–10 пользователях (`docs/PILOT_STUDY_PROTOCOL.md`)
+### M4 — Валидация и калибровка
+
+**Инструментарий ✅ / сама валидация ⬜.** Ниже сделаны средства измерения, а не измерение:
+ни одной ночи на реальных данных не собрано, алгоритм не видел настоящий PPG.
+
+Инструментарий:
+- [x] Режим пассивного сбора без стимулов (`NightMode.BEGINNER`)
+- [x] `PilotValidationEngine`: сопоставление confidence-скоров со стадиями Samsung Health, hit-rate, precision, specificity, F1
+- [x] `optimizeWeights` — перекалибровка весов `RemConfidenceEngine` по собранным данным
+- [x] Экспорт сессий в CSV (`generatePilotCsv`) и регламент пилота (`docs/PILOT_STUDY_PROTOCOL.md`)
+
+Собственно валидация:
+- [ ] **Не заблокирована партнёрской заявкой.** Developer mode Health Sensor Service даёт настоящие IBI и PPG без одобрения Samsung — см. [SAMSUNG_HEALTH_PARTNER_GUIDE.md](docs/SAMSUNG_HEALTH_PARTNER_GUIDE.md), раздел 2
+- [ ] Исправить баг #10 — до этого любые метрики на не-Samsung источнике бессмысленны
+- [ ] Подключить реальный трекер Samsung вместо `SamsungSensorDataSourceStub`
+- [ ] Собрать ночи в пассивном режиме на своих часах
+- [ ] Посчитать реальный hit-rate против стадий Samsung Health
+- [ ] Перекалибровать веса и только потом заявлять точность
+- [ ] Пилот на 5–10 пользователях
 
 ### M5 — Продуктовая поверхность
 - [x] **Экран скрининга безопасности в онбординге** (`ScreeningScreen` + `ScreeningViewModel`) — заполняет `UserProfile.screening`, показывает последствия ответов до отправки, допускает пропуск (без ночных сигналов) и повторное прохождение из баннера на Tonight
@@ -110,6 +124,8 @@
 | 7 | `core/algorithm/.../RemConfidenceEngine.kt` | Разрыв в `calculateMotionScore` на границе 0.05, неиспользуемый импорт | ✅ Исправлен |
 | 8 | `core/algorithm/.../NightCueDecisionEngine.kt` | Литерал `0.65` служил sentinel-значением («порог не переопределяли»): сравнение `Double` на неравенство, явно переданный `0.65` молча игнорировался в пользу профиля, семантика ломалась при смене дефолта. Заменено на `confidenceThresholdOverride: Double? = null` + `?: userProfile.confidenceThreshold`, добавлены 2 регрессионных теста | ✅ Исправлен |
 | 9 | `phoneApp/.../phone/Main.kt` | 338 строк мёртвого кода: консольный `fun main()` из JVM-прототипа остался в Android-модуле, где никогда не вызывается | ✅ Исправлен (файл удалён) |
+| 10 | `wearApp/.../sensor/SensorDataSource.kt` | **`AndroidStandardSensorDataSource` синтезирует `IbiReading`** из обычного HR-датчика: либо интервал между колбэками (артефакт частоты опроса), либо `60000/bpm` (детерминированная функция от BPM). Из этих чисел считается RMSSD/SDNN, то есть `hrv_score` — 20% веса — берётся из шума. Хуже: фабрикация обходит гардрейл достаточности данных (`ibis.size >= 5`), который вводился ровно затем, чтобы отсутствие IBI блокировало сигнал | 🔴 Критический |
+| 11 | `wearApp/.../sensor/SensorDataSource.kt` | `SamsungSensorDataSourceStub` объявляет `fidelity = SAMSUNG_CONTINUOUS_IBI`, но делегирует всё `AndroidStandardSensorDataSource`. На Galaxy Watch `WatchReadyScreen` показывает «● Samsung IBI Active» при неподключённом SDK | 🟡 Средний |
 
 ## ⚠️ Внешние блокеры и риски
 
