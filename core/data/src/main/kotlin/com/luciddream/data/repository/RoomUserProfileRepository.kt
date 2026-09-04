@@ -38,7 +38,8 @@ class RoomUserProfileRepository(
             cooldownMinutes = cooldownMinutes,
             earliestCueMinutesAfterOnset = earliestCueMinutesAfterOnset,
             confidenceThreshold = confidenceThreshold,
-            calibrationNightsCompleted = calibrationNightsCompleted
+            calibrationNightsCompleted = calibrationNightsCompleted,
+            screening = screening
         )
     }
 
@@ -57,7 +58,8 @@ class RoomUserProfileRepository(
             cooldownMinutes = cooldownMinutes,
             earliestCueMinutesAfterOnset = earliestCueMinutesAfterOnset,
             confidenceThreshold = confidenceThreshold,
-            calibrationNightsCompleted = calibrationNightsCompleted
+            calibrationNightsCompleted = calibrationNightsCompleted,
+            screening = screening
         )
     }
 }

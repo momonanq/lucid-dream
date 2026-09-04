@@ -1,6 +1,8 @@
 package com.luciddream.phone.service
 
 import com.luciddream.algorithm.CalibrationEngine
+import com.luciddream.algorithm.SleepSafetyGuardian
+import com.luciddream.algorithm.effectiveMode
 import com.luciddream.data.repository.NightSessionRepository
 import com.luciddream.data.repository.UserProfileRepository
 import com.luciddream.data.samsung.SamsungHealthDataGateway
@@ -19,47 +21,86 @@ class PhoneSessionCoordinator(
     private val profileRepository: UserProfileRepository,
     private val samsungHealthGateway: SamsungHealthDataGateway,
     private val audioElement: TlrAudioEngine,
-    private val calibrationEngine: CalibrationEngine = CalibrationEngine()
+    private val calibrationEngine: CalibrationEngine = CalibrationEngine(),
+    private val safetyGuardian: SleepSafetyGuardian = SleepSafetyGuardian()
 ) {
+
+    /**
+     * Outcome of a start request, including how the sleep-fragmentation guardrails ruled on it.
+     * [effectiveMode] may differ from [requestedMode] when the night was downgraded to recovery.
+     */
+    data class NightStartResult(
+        val payload: StartSessionPayload,
+        val requestedMode: NightMode,
+        val guardrail: SleepSafetyGuardian.Decision
+    ) {
+        val effectiveMode: NightMode get() = guardrail.effectiveMode
+        val cuesWithheld: Boolean get() = guardrail is SleepSafetyGuardian.Decision.RestNight
+    }
+
+    /**
+     * Applies the across-nights exposure limits without starting anything, so the Tonight screen
+     * can warn about a recovery night before the user commits to it.
+     */
+    suspend fun evaluateTonight(
+        mode: NightMode,
+        nowMs: Long = System.currentTimeMillis()
+    ): SleepSafetyGuardian.Decision {
+        return safetyGuardian.evaluateNight(
+            requestedMode = mode,
+            screening = profileRepository.getUserProfile().first().screening,
+            recentSessions = sessionRepository.getAllSessions().first(),
+            recentReports = sessionRepository.getAllMorningReports().first(),
+            nowMs = nowMs
+        )
+    }
 
     suspend fun startNightSession(
         mode: NightMode,
         audioEnabled: Boolean = true,
         wbtbAlarmTimeMs: Long? = null
-    ): StartSessionPayload {
+    ): NightStartResult {
         val profile = profileRepository.getUserProfile().first()
         val sessionId = "session_${UUID.randomUUID().toString().take(8)}"
         val startTime = System.currentTimeMillis()
+
+        // A blocked night still runs, but in BEGINNER mode, where NightCueDecisionEngine
+        // independently suppresses every nocturnal cue.
+        val guardrail = evaluateTonight(mode, startTime)
+        val effectiveMode = guardrail.effectiveMode
+        val cuesAllowed = effectiveMode != NightMode.BEGINNER
 
         val session = NightSession(
             id = sessionId,
             userId = profile.id,
             startTimeMs = startTime,
-            mode = mode,
+            mode = effectiveMode,
             status = SessionStatus.RUNNING,
-            cuesPlanned = profile.maxCuesPerNight,
+            cuesPlanned = if (cuesAllowed) profile.maxCuesPerNight else 0,
             cuesTriggered = 0,
             cooldownMinutes = profile.cooldownMinutes,
             earliestCueMinutes = profile.earliestCueMinutesAfterOnset,
             hapticIntensity = profile.preferredHapticIntensity,
-            audioEnabled = audioEnabled,
-            wbtbEnabled = mode == NightMode.WBTB,
-            wbtbAlarmTimeMs = wbtbAlarmTimeMs
+            audioEnabled = audioEnabled && cuesAllowed,
+            wbtbEnabled = effectiveMode == NightMode.WBTB,
+            wbtbAlarmTimeMs = wbtbAlarmTimeMs.takeIf { cuesAllowed }
         )
 
         sessionRepository.saveSession(session)
 
-        return StartSessionPayload(
+        val payload = StartSessionPayload(
             sessionId = sessionId,
-            mode = mode,
+            mode = session.mode,
             startTimeMs = startTime,
-            earliestCueMinutes = profile.earliestCueMinutesAfterOnset,
-            cooldownMinutes = profile.cooldownMinutes,
-            maxCues = profile.maxCuesPerNight,
-            hapticIntensity = profile.preferredHapticIntensity,
-            audioEnabled = audioEnabled,
-            wbtbAlarmTimeMs = wbtbAlarmTimeMs
+            earliestCueMinutes = session.earliestCueMinutes,
+            cooldownMinutes = session.cooldownMinutes,
+            maxCues = session.cuesPlanned,
+            hapticIntensity = session.hapticIntensity,
+            audioEnabled = session.audioEnabled,
+            wbtbAlarmTimeMs = session.wbtbAlarmTimeMs
         )
+
+        return NightStartResult(payload, mode, guardrail)
     }
 
     suspend fun handleLiveCueEvent(payload: CueTriggeredPayload) {

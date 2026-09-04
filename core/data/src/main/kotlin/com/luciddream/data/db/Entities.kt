@@ -98,7 +98,8 @@ data class UserProfileEntity(
     val cooldownMinutes: Int,
     val earliestCueMinutesAfterOnset: Int,
     val confidenceThreshold: Double,
-    val calibrationNightsCompleted: Int
+    val calibrationNightsCompleted: Int,
+    val screening: SafetyScreening = SafetyScreening()
 )
 
 @Entity(tableName = "queued_sync_events")

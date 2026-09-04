@@ -16,7 +16,10 @@ import androidx.room.TypeConverters
         UserProfileEntity::class,
         QueuedSyncEventEntity::class
     ],
-    version = 1,
+    // v2 adds UserProfileEntity.screening (onboarding safety screening).
+    // fallbackToDestructiveMigration below is the project's pre-release policy: the schema change
+    // wipes local data instead of migrating it. Replace with a real Migration before any release.
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

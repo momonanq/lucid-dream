@@ -8,6 +8,8 @@ import com.luciddream.data.sync.CueTriggeredPayload
 import com.luciddream.data.sync.QuickMorningFeedbackPayload
 import com.luciddream.model.CueType
 import com.luciddream.model.NightMode
+import com.luciddream.model.SafetyScreening
+import com.luciddream.model.UserProfile
 import com.luciddream.phone.audio.TlrAudioEngine
 import com.luciddream.phone.service.PhoneSessionCoordinator
 import com.luciddream.phone.ui.DreamJournalViewModel
@@ -21,7 +23,17 @@ class PhoneCompanionEndToEndTest {
     @Test
     fun `end to end phone workflow with dream journal and night session coordination`() = runTest {
         val sessionRepo = InMemoryNightSessionRepository()
-        val profileRepo = InMemoryUserProfileRepository()
+        // Cue modes require a completed onboarding screening; without it the sleep-fragmentation
+        // guardrails downgrade every night to BEGINNER.
+        val profileRepo = InMemoryUserProfileRepository(
+            UserProfile(
+                screening = SafetyScreening(
+                    isComplete = true,
+                    ageYears = 32,
+                    acknowledgedNotMedicalDevice = true
+                )
+            )
+        )
         val gateway = MockSamsungHealthDataGateway()
         val audioEngine = TlrAudioEngine()
         val coordinator = PhoneSessionCoordinator(sessionRepo, profileRepo, gateway, audioEngine)

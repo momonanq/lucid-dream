@@ -127,7 +127,10 @@ fun TonightScreen(
                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable { viewModel.selectMode(mode) }
+                        .clickable {
+                            viewModel.selectMode(mode)
+                            coroutineScope.launch { viewModel.refreshGuardrail() }
+                        }
                 ) {
                     Column(
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -290,6 +293,68 @@ fun TonightScreen(
                     Text("Test Notification Prompt Now")
                 }
             }
+        }
+
+        // Sleep-fragmentation guardrails: recovery night notice or weekly-limit advisory.
+        val guardrailMessages = uiState.guardrailMessages
+        if (guardrailMessages.isNotEmpty()) {
+            val isRestNight = uiState.cuesWithheldTonight
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (isRestNight) {
+                    MaterialTheme.colorScheme.errorContainer
+                } else {
+                    MaterialTheme.colorScheme.secondaryContainer
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (isRestNight) Icons.Default.Bedtime else Icons.Default.Info,
+                            contentDescription = null,
+                            tint = if (isRestNight) {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            },
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isRestNight) "Ночь восстановления" else "Напоминание о лимите",
+                            fontWeight = FontWeight.Bold,
+                            color = if (isRestNight) {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    guardrailMessages.forEach { message ->
+                        Text(
+                            text = "• $message",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isRestNight) {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            }
+                        )
+                    }
+                    if (isRestNight) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Сессия запустится без ночных сигналов: дневник снов, " +
+                                "утренний recall и reality checks остаются доступны.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
         }
 
         // Start Sleep Button

@@ -33,5 +33,7 @@ data class UserProfile(
     val cooldownMinutes: Int = 15,
     val earliestCueMinutesAfterOnset: Int = 90,
     val confidenceThreshold: Double = 0.65,
+    /** Onboarding safety screening; gates whether nocturnal cue modes may run at all. */
+    val screening: SafetyScreening = SafetyScreening(),
     val calibrationNightsCompleted: Int = 0
 )
