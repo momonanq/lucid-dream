@@ -5,9 +5,23 @@ plugins {
     kotlin("plugin.compose")
 }
 
+// The Samsung Health Sensor SDK is proprietary and cannot be committed to a public repository,
+// so it is absent on CI and on any fresh clone. Its integration therefore lives in its own source
+// directory, swapped for a stub when the AAR is missing: both provide createSamsungSensorDataSource,
+// so the module compiles either way and CI stays green without the SDK.
+// Download it from https://developer.samsung.com/health/sensor and drop the AAR into wearApp/libs/.
+val samsungSensorAar: File? = fileTree("libs") { include("samsung-health-sensor-api-*.aar") }
+    .files
+    .minByOrNull { it.name }
+val hasSamsungSensorSdk = samsungSensorAar != null
+
 android {
     namespace = "com.luciddream.wear"
     compileSdk = 35
+
+    sourceSets.getByName("main") {
+        java.srcDir(if (hasSamsungSensorSdk) "src/samsung/kotlin" else "src/noSamsung/kotlin")
+    }
 
     defaultConfig {
         applicationId = "com.luciddream.wear"
@@ -40,6 +54,13 @@ android {
 }
 
 dependencies {
+    if (samsungSensorAar != null) {
+        logger.lifecycle("Samsung Health Sensor SDK found: ${samsungSensorAar.name}")
+        implementation(files(samsungSensorAar))
+    } else {
+        logger.lifecycle("Samsung Health Sensor SDK absent — building with the standard Wear OS sensor source only")
+    }
+
     implementation(project(":core:model"))
     implementation(project(":core:algorithm"))
     implementation(project(":core:data"))

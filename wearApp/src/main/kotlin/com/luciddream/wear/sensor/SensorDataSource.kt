@@ -47,7 +47,13 @@ interface SensorDataSource {
  * Operates on all Wear OS devices (Samsung, Google Pixel Watch, TicWatch) with graceful degradation.
  */
 class AndroidStandardSensorDataSource(
-    private val context: Context
+    private val context: Context,
+    /**
+     * Set false when a higher-fidelity source supplies heart rate, so this one contributes motion
+     * only. Without it the Samsung source would register both sensors and every beat would be
+     * counted twice.
+     */
+    private val provideHeartRate: Boolean = true
 ) : SensorDataSource, SensorEventListener {
 
     override val fidelity: SourceFidelity = SourceFidelity.ANDROID_STANDARD_HR
@@ -106,8 +112,10 @@ class AndroidStandardSensorDataSource(
         if (isSensorsRegistered) return
         val sm = sensorManager ?: return
 
-        hrSensor?.let {
-            sm.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+        if (provideHeartRate) {
+            hrSensor?.let {
+                sm.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+            }
         }
         accelSensor?.let {
             sm.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
@@ -153,40 +161,6 @@ class AndroidStandardSensorDataSource(
 }
 
 /**
- * Placeholder / Stub for the Samsung Health Sensor SDK continuous PPG & IBI tracker.
- * When the Samsung Partner Privilege is granted, this tracker binds to
- * com.samsung.android.service.health.sensor.HealthTrackingService.
- */
-class SamsungSensorDataSourceStub(
-    private val context: Context
-) : SensorDataSource {
-
-    private val fallback = AndroidStandardSensorDataSource(context)
-
-    /**
-     * Reports what is actually delivered, not what this class is named after.
-     *
-     * Until the real tracker is wired up this stub is the standard Wear OS source, and claiming
-     * SAMSUNG_CONTINUOUS_IBI made the watch display "Samsung IBI Active" with no SDK attached
-     * and told the scoring engine that HRV was measured when it was not.
-     */
-    override val fidelity: SourceFidelity get() = fallback.fidelity
-
-    override fun start(callback: SensorDataCallback) {
-        // Fallback to standard sensors until partner signature is linked
-        fallback.start(callback)
-    }
-
-    override fun stop() {
-        fallback.stop()
-    }
-
-    override fun setSamplingPolicy(policy: SamplingPolicy) {
-        fallback.setSamplingPolicy(policy)
-    }
-}
-
-/**
  * Simulated sensor data source producing synthetic sleep curve data for testing and emulators.
  */
 class SimulatedSensorDataSource(
@@ -228,18 +202,19 @@ object SensorDataSourceFactory {
             return SimulatedSensorDataSource()
         }
 
-        val isSamsung = Build.MANUFACTURER.contains("samsung", ignoreCase = true)
-        val hasSamsungHealthService = try {
-            val pm = context.packageManager
-            pm.getPackageInfo("com.samsung.android.service.health.sensor", 0) != null
-        } catch (e: Exception) {
-            false
+        // createSamsungSensorDataSource resolves to the real SDK integration only when the
+        // proprietary AAR is present at build time; otherwise it returns null. Falling back to the
+        // standard source is safe because that source reports its own fidelity honestly, so the
+        // watch UI and the scoring engine both learn that no inter-beat intervals are coming.
+        val isSamsungWatch = Build.MANUFACTURER.contains("samsung", ignoreCase = true)
+        val hasHealthSensorService = runCatching {
+            context.packageManager.getPackageInfo("com.samsung.android.service.health.sensor", 0) != null
+        }.getOrDefault(false)
+
+        if (isSamsungWatch && hasHealthSensorService) {
+            createSamsungSensorDataSource(context)?.let { return it }
         }
 
-        return if (isSamsung && hasSamsungHealthService) {
-            SamsungSensorDataSourceStub(context)
-        } else {
-            AndroidStandardSensorDataSource(context)
-        }
+        return AndroidStandardSensorDataSource(context)
     }
 }
